@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+// Package name for generated code. Keep it short and stable so generated
+// modules can be imported predictably from Rust (prost/tonic) or other
+// languages.
+package client_management;
+
+option go_package = "client_management";
+
+// Request payload for creating a user. We include username, password and a
+// boolean is_deleted flag to match repository shape. Password handling and
+// validation should be implemented in service/business layers.
+message UserCreateRequest {
+  string username = 1;
+  string password = 2;
+  bool is_deleted = 3;
+}
+
+// Minimal user data returned in responses.
+message UserData {
+  string username = 1;
+}
+
+// Standard response envelope used by the user create RPC. Matches the shape
+// requested earlier: { isSuccess, message, data { username } }.
+message UserCreateResponse {
+  bool isSuccess = 1;
+  string message = 2;
+  // data is optional in protobuf (presence via default values). When there's
+  // no data (error case) the field will be unset.
+  optional UserData data = 3;
+}
+
+// Service exposing user-related RPCs. Start with Create; more methods can be
+// added later.
+service UserService {
+  // Create a new user.
+  rpc Create (UserCreateRequest) returns (UserCreateResponse);
+}

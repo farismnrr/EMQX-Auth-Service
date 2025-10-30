@@ -1,9 +1,8 @@
 services:
   rocksdb:
-    build: ./rocksdb
+    image: rocksdb:latest
     container_name: rocksdb
     volumes:
-      - ./rocksdb/data:/data
-      - ./rocksdb/artifacts:/usr/local:ro
+      - ./rocksdb-data:/data
     command: ["tail", "-f", "/dev/null"]
     restart: unless-stopped

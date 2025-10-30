@@ -1,64 +1,89 @@
 #!/bin/bash
 set -euo pipefail
 
-# Default ROCKSDB_PATH to the script directory if not provided
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-: "${ROCKSDB_PATH:=$SCRIPT_DIR}"
+
+# Default DB path (host-side)
+: "${ROCKSDB_PATH:="$SCRIPT_DIR/rocksdb-data/iotnet"}"
+if [ ! -d "$ROCKSDB_PATH" ]; then
+  ROCKSDB_PATH="$SCRIPT_DIR"
+fi
 
 echo "[*] Checking RocksDB connection..."
-if [ ! -d "$ROCKSDB_PATH" ]; then
-  echo "❌ RocksDB directory not found at $ROCKSDB_PATH"
-  echo "Hint: set ROCKSDB_PATH to the RocksDB database directory before running the script."
-  exit 1
-fi
 
-# Find available ldb tool
-if command -v rocksdb_ldb >/dev/null 2>&1; then
-  LDB_CMD=rocksdb_ldb
-elif command -v ldb >/dev/null 2>&1; then
-  LDB_CMD=ldb
+find_local_ldb() {
+  if command -v rocksdb_ldb >/dev/null 2>&1; then
+    echo "rocksdb_ldb"
+  elif command -v ldb >/dev/null 2>&1; then
+    echo "ldb"
+  else
+    return 1
+  fi
+}
+
+COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+docker_available() { command -v docker >/dev/null 2>&1; }
+
+if LDB_LOCAL="$(find_local_ldb 2>/dev/null || true)" && [ -n "$LDB_LOCAL" ]; then
+  MODE="local"
+  LDB_CMD="$LDB_LOCAL"
 else
-  echo "❌ Could not find 'rocksdb_ldb' or 'ldb' in PATH."
-  echo "Hint: this container/runtime expects RocksDB artifacts mounted to /usr/local."
-  echo
-  echo "Quick options to provide the tools without rebuilding RocksDB every time:" 
-  echo "  1) If you have already built a full image 'my-rocksdb:8.11.3', extract artifacts once:" 
-  echo "       mkdir -p ./rocksdb/artifacts && \\"
-  echo "       docker run --rm my-rocksdb:8.11.3 bash -lc 'tar -C /usr/local -c librocksdb* bin/ldb' \\"
-  echo "         | tar -C ./rocksdb/artifacts -xvf -"
-  echo "     This will populate ./rocksdb/artifacts with ldb and librocksdb.so files."
-  echo
-  echo "  2) Or (fast) mount a local prebuilt ldb and libs into ./rocksdb/artifacts and restart the service."
-  echo
-  echo "  3) Or run the check once inside the heavy image and copy files out:\\"
-  echo "       docker run --rm -v \$(pwd)/rocksdb/artifacts:/out -w / \\"
-  echo "         my-rocksdb:8.11.3 bash -lc 'cp /usr/local/bin/ldb /out/ || true; cp /usr/local/lib/librocksdb* /out/ || true'"
-  echo
-  echo "After putting ldb and librocksdb*.so into ./rocksdb/artifacts, bring the compose service up and the check will work without rebuilding RocksDB."
-  exit 1
+  if docker_available && [ -f "$COMPOSE_FILE" ]; then
+    MODE="docker"
+    if docker ps --format '{{.Names}}' | grep -q '^rocksdb$'; then
+      DOCKER_MODE="exec"
+    else
+      DOCKER_MODE="compose-run"
+    fi
+  else
+    echo "❌ Could not find a local 'ldb' and Docker Compose is not available or $COMPOSE_FILE is missing."
+    exit 1
+  fi
 fi
 
-# Use a unique test key to avoid collisions
+echo "[*] Using DB path: $ROCKSDB_PATH (mode: $MODE${DOCKER_MODE:+, docker_mode: $DOCKER_MODE})"
+
+# If in Docker mode, translate the host path to the container path
+if [ "$MODE" = "docker" ]; then
+  # automatic translation: assumes volume ./rocksdb-data:/data
+  CONTAINER_DB_PATH="/data/iotnet"
+else
+  CONTAINER_DB_PATH="$ROCKSDB_PATH"
+fi
+
+run_ldb() {
+  if [ "$MODE" = "local" ]; then
+    "$LDB_CMD" "$@"
+  else
+    if [ "$DOCKER_MODE" = "exec" ]; then
+      docker exec rocksdb /usr/local/bin/ldb "$@"
+    else
+      if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        docker compose -f "$COMPOSE_FILE" run --rm rocksdb /usr/local/bin/ldb "$@"
+      else
+        docker-compose -f "$COMPOSE_FILE" run --rm rocksdb /usr/local/bin/ldb "$@"
+      fi
+    fi
+  fi
+}
+
 TEST_KEY="check_connection_test_key_$$"
 TEST_VALUE="check_connection_test_value"
 
-echo "[*] Using DB: $ROCKSDB_PATH (tool: $LDB_CMD)"
-
-# Try write
-if ! "$LDB_CMD" --db="$ROCKSDB_PATH" put "$TEST_KEY" "$TEST_VALUE"; then
-  echo "❌ Failed to write to RocksDB using $LDB_CMD"
+# Use translated path in Docker mode
+if ! run_ldb --db="$CONTAINER_DB_PATH" put "$TEST_KEY" "$TEST_VALUE" >/dev/null 2>&1; then
+  echo "❌ Failed to write to RocksDB (mode: $MODE)."
+  echo "If using Docker, ensure the 'rocksdb' service is defined in $COMPOSE_FILE and that artifacts/bin 'ldb' is available inside the container."
   exit 1
 fi
 
-# Try read back
-read_out=$("$LDB_CMD" --db="$ROCKSDB_PATH" get "$TEST_KEY" 2>/dev/null || true)
-if [[ -z "$read_out" || "${read_out}" != *"$TEST_VALUE"* ]]; then
-  echo "❌ RocksDB read test failed (got: ${read_out:-<empty>})"
+read_out="$(run_ldb --db="$CONTAINER_DB_PATH" get "$TEST_KEY" 2>/dev/null || true)"
+if [[ -z "$read_out" || "$read_out" != *"$TEST_VALUE"* ]]; then
+  echo "❌ RocksDB read test failed (got: ${read_out:-<empty>})."
   exit 1
 fi
 
-# Cleanup: attempt to delete test key (ignore errors)
-"$LDB_CMD" --db="$ROCKSDB_PATH" delete "$TEST_KEY" >/dev/null 2>&1 || true
+run_ldb --db="$CONTAINER_DB_PATH" delete "$TEST_KEY" >/dev/null 2>&1 || true
 
-echo "✅ RocksDB connection and read/write test OK (DB: $ROCKSDB_PATH, tool: $LDB_CMD)"
+echo "✅ RocksDB connection and read/write test OK (DB: $ROCKSDB_PATH, mode: $MODE)"
 exit 0
