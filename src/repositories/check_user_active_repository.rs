@@ -6,16 +6,16 @@ use log::error;
 use crate::entities::user_entity::UserEntity;
 use crate::repositories::repository_error::UserRepositoryError;
 
-pub struct GetUserRepository {
+pub struct CheckUserActiveRepository {
     db: Arc<DB>,
 }
 
-impl GetUserRepository {
+impl CheckUserActiveRepository {
     pub fn new(db: Arc<DB>) -> Self {
-        GetUserRepository { db }
+        CheckUserActiveRepository { db }
     }
 
-    pub fn get_active_users(&self, username: &str) -> Result<Option<UserEntity>, UserRepositoryError> {
+    pub fn check_user_active(&self, username: &str) -> Result<Option<UserEntity>, UserRepositoryError> {
         // Build RocksDB key
         let key: String = format!("users:{}", username);
 
@@ -40,10 +40,6 @@ impl GetUserRepository {
             }
         };
 
-        if user.is_deleted {
-            return Ok(None);
-        }
-        
         Ok(Some(user))
     }
 }
