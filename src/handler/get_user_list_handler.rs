@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::services::get_user_list_service::GetUserListService;
 use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::user_dto::GetUserListDTO;
 use crate::utils::app_error::AppError;
 
 pub struct AppState {
@@ -16,7 +17,7 @@ pub async fn get_user_list_handler(
         Ok(users) => HttpResponse::Ok().json(ResponseDTO {
             success: true,
             message: "User list retrieved successfully",
-            data: Some(users),
+            data: Some(GetUserListDTO { users }),
         }),
         Err(e) => e.default_http_response(),
     }

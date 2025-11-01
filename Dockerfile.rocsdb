@@ -14,7 +14,6 @@ WORKDIR /build/rocksdb
 RUN make -j"$(nproc)" static_lib shared_lib ldb
 RUN make INSTALL_PATH=/usr/local install
 
-# ✨ Tambahin baris ini — pastiin biner & tools library ikut ke /usr/local/lib
 RUN cp ./ldb /usr/local/bin/ldb && \
     cp ./librocksdb_tools.so* /usr/local/lib/ && \
     chmod +x /usr/local/bin/ldb
@@ -27,7 +26,6 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=builder /usr/local /usr/local
 
-# 🔧 Tambahkan path library RocksDB biar ldconfig tau
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/rocksdb.conf && ldconfig
 
 ENV ROCKSDB_PATH=/data

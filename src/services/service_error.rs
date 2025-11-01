@@ -7,5 +7,5 @@ pub enum UserServiceError {
     Repository(#[from] UserRepositoryError),
 
     #[error("Hashing error: {0}")]
-    Hash(String),
+    Hashing(String),
 }

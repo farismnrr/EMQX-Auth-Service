@@ -8,6 +8,11 @@ pub struct UserDTO {
 }
 
 #[derive(Serialize)]
+pub struct GetUserListDTO {
+    pub users: Vec<UserDTO>,
+}
+
+#[derive(Serialize)]
 pub struct CreateUserDTO {
     pub username: String,
     pub password: String,

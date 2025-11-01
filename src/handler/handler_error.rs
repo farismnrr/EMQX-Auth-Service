@@ -22,7 +22,7 @@ impl AppError for UserServiceError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::Repository(e) => e.status_code(),
-            Self::Hash(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Hashing(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

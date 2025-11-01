@@ -401,6 +401,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "hex",
+ "log",
  "rand 0.8.5",
  "rocksdb",
  "serde",

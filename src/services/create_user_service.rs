@@ -19,8 +19,7 @@ impl CreateUserService {
         let username = Self::create_username();
         let password = Self::create_password();
         let hashed = hash_password(&password)
-            .map_err(|e| UserServiceError::Hash(format!("Password hash failed: {}", e)))?;
-
+            .map_err(|e| UserServiceError::Hashing(e))?;
         self.repo.create_user(&username, &hashed)?;
         Ok((username, password))
     }
