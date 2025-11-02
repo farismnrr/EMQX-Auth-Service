@@ -1,5 +1,7 @@
-use actix_web::{App, HttpServer, middleware, web};
+use actix_web::{App, HttpServer, HttpResponse, middleware, web, Responder};
+use chrono::Local;
 use std::sync::Arc;
+use std::io::Write;
 use log::{info, error};
 
 use crate::infrastructure::rocksdb::{init_rocksdb, close_rocksdb};
@@ -19,6 +21,12 @@ use crate::repositories::create_user_repository::CreateUserRepository;
 use crate::repositories::get_user_list_repository::GetUserListRepository;
 use crate::repositories::check_user_active_repository::CheckUserActiveRepository;
 
+async fn healthcheck() -> impl Responder {
+    HttpResponse::Ok()
+        .content_type("text/plain; charset=utf-8")
+        .body("OK")
+}
+
 pub async fn run_server() -> std::io::Result<()> {
     // =====================
     // 🌱 Load Environment Variables
@@ -26,14 +34,35 @@ pub async fn run_server() -> std::io::Result<()> {
     dotenvy::dotenv().ok();
 
     // =====================
-    // 🪵 Initialize logger from environment
+    // 🪵 Initialize logger with custom format + color
     // =====================
     let env = env_logger::Env::new().filter_or("LOG_LEVEL", "info");
     env_logger::Builder::from_env(env)
-        .format_timestamp_secs()
+        .format(|buf, record| {
+            let ts = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            let color = match record.level() {
+                log::Level::Error => "\x1b[31m", // Red
+                log::Level::Warn  => "\x1b[33m", // Yellow
+                log::Level::Info  => "\x1b[32m", // Green
+                log::Level::Debug => "\x1b[34m", // Blue
+                log::Level::Trace => "\x1b[36m", // Cyan
+            };
+            let reset = "\x1b[0m";
+
+            writeln!(
+                buf,
+                "[{} {}{:<5}{}] {}",
+                ts,
+                color,
+                record.level(),
+                reset,
+                record.args()
+            )
+        })
         .format_target(false)
         .init();
-    info!("🟢 Logging initialized");
+    info!("🟢 Logging initialized successfully");
+
 
     // =====================
     // 🗄️ Database Initialization
@@ -45,6 +74,7 @@ pub async fn run_server() -> std::io::Result<()> {
             error!("❌ Failed to initialize RocksDB at {}: {}", db_path, e);
             std::io::Error::new(std::io::ErrorKind::Other, "Failed to initialize RocksDB")
         })?;
+    info!("🟢 RocksDB initialized successfully at {}", db_path);
 
     // =====================
     // 🧩 Repository Layer
@@ -80,6 +110,11 @@ pub async fn run_server() -> std::io::Result<()> {
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
             .wrap(middleware::Compress::default())
+
+            // 🩺 Root API — health check
+            .route("/", web::get().to(healthcheck))
+
+            // 👥 User endpoints
             .service(
                 web::scope("/users")
                     .route("/create", web::post().to(create_user_handler))

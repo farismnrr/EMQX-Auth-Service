@@ -21,7 +21,7 @@ where
     pub success: bool,
     pub message: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<D>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<D>,
 }

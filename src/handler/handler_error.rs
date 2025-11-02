@@ -64,17 +64,9 @@ pub fn handle_check_user_active_error(error: &UserServiceError) -> HttpResponse 
                 result: Some("deny"),
                 details: Some(errors),
             };
-            HttpResponse::Ok().json(response)
+            HttpResponse::BadRequest().json(response)
         }
-        _ => {
-            let response: ErrorResponseDTO<()> = ErrorResponseDTO {
-                success: false,
-                message: &error.to_string(),
-                result: Some("deny"),
-                details: None,
-            };
-            HttpResponse::Ok().json(response)
-        }
+        _ => error.to_http_response(),
     }
 }
 

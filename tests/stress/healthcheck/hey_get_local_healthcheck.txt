@@ -1,0 +1,45 @@
+
+Summary:
+  Total:	38.8744 secs
+  Slowest:	20.0647 secs
+  Fastest:	0.0001 secs
+  Average:	0.0484 secs
+  Requests/sec:	25723.8807
+  
+
+Response time histogram:
+  0.000 [1]	|
+  2.007 [998917]	|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  4.013 [27]	|
+  6.019 [20]	|
+  8.026 [0]	|
+  10.032 [0]	|
+  12.039 [3]	|
+  14.045 [0]	|
+  16.052 [2]	|
+  18.058 [43]	|
+  20.065 [605]	|
+
+
+Latency distribution:
+  10% in 0.0037 secs
+  25% in 0.0106 secs
+  50% in 0.0292 secs
+  75% in 0.0518 secs
+  90% in 0.0735 secs
+  95% in 0.0916 secs
+  99% in 0.1399 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:	0.0001 secs, 0.0001 secs, 20.0647 secs
+  DNS-lookup:	0.0010 secs, 0.0000 secs, 0.1948 secs
+  req write:	0.0006 secs, 0.0000 secs, 0.2022 secs
+  resp wait:	0.0295 secs, 0.0000 secs, 19.9833 secs
+  resp read:	0.0144 secs, 0.0000 secs, 0.2710 secs
+
+Status code distribution:
+  [200]	999618 responses
+
+Error distribution:
+  [382]	Get "http://localhost:5500": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+
