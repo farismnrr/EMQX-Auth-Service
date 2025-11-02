@@ -1,6 +1,6 @@
 use thiserror::Error;
 use serde::Serialize;
-use crate::repositories::repository_error::UserRepositoryError;
+use crate::repositories::repository_error::MqttRepositoryError;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationError {
@@ -9,12 +9,12 @@ pub struct ValidationError {
 }
 
 #[derive(Debug, Error)]
-pub enum UserServiceError {
+pub enum MqttServiceError {
     #[error("Repository error: {0}")]
-    Repository(#[from] UserRepositoryError),
+    Repository(#[from] MqttRepositoryError),
 
-    #[error("User not found: {0}")]
-    UserNotFound(String),
+    #[error("Mqtt not found: {0}")]
+    MqttNotFound(String),
 
     #[error("Bad request")]
     BadRequest(Vec<ValidationError>),
@@ -22,8 +22,8 @@ pub enum UserServiceError {
     #[error("Invalid credentials: {0}")]
     InvalidCredentials(String),
 
-    #[error("User is not active or deleted: {0}")]
-    UserNotActive(String),
+    #[error("Mqtt is not active or deleted: {0}")]
+    MqttNotActive(String),
 
     #[error("JWT error: {0}")]
     JwtError(String),

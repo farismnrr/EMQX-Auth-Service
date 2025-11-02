@@ -41,5 +41,5 @@ Status code distribution:
   [200]	998975 responses
 
 Error distribution:
-  [1025]	Get "http://localhost:5500/users": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+  [1025]	Get "http://localhost:5500/mqtts": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
 

@@ -4,8 +4,8 @@ use actix_web::{http::StatusCode, HttpResponse};
 use serde::Serialize;
 
 use crate::dtos::response_dto::ErrorResponseDTO;
-use crate::repositories::repository_error::UserRepositoryError;
-use crate::services::service_error::{UserServiceError, ValidationError};
+use crate::repositories::repository_error::MqttRepositoryError;
+use crate::services::service_error::{MqttServiceError, ValidationError};
 
 pub trait AppError: Sized {
     fn status_code(&self) -> StatusCode;
@@ -26,7 +26,7 @@ pub trait AppError: Sized {
     }
 }
 
-impl AppError for UserRepositoryError {
+impl AppError for MqttRepositoryError {
     fn status_code(&self) -> StatusCode {
         StatusCode::INTERNAL_SERVER_ERROR
     }
@@ -36,14 +36,14 @@ impl AppError for UserRepositoryError {
     }
 }
 
-impl AppError for UserServiceError {
+impl AppError for MqttServiceError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UserNotFound(_) => StatusCode::NOT_FOUND,
+            Self::MqttNotFound(_) => StatusCode::NOT_FOUND,
             Self::InvalidCredentials(_) => StatusCode::UNAUTHORIZED,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::UserNotActive(_) => StatusCode::FORBIDDEN,
+            Self::MqttNotActive(_) => StatusCode::FORBIDDEN,
             Self::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -56,9 +56,9 @@ impl AppError for UserServiceError {
     }
 }
 
-pub fn handle_user_login(error: &UserServiceError) -> HttpResponse {
+pub fn handle_mqtt_login(error: &MqttServiceError) -> HttpResponse {
     match error {
-        UserServiceError::BadRequest(errors) => {
+        MqttServiceError::BadRequest(errors) => {
             let response: ErrorResponseDTO<&Vec<ValidationError>> = ErrorResponseDTO {
                 success: false,
                 message: "Validation error",

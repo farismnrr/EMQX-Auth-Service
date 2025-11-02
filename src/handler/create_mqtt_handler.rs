@@ -1,24 +1,24 @@
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
-use crate::services::create_user_service::CreateUserService;
-use crate::dtos::user_dto::CreateUserDTO;
+use crate::services::create_mqtt_service::CreateMqttService;
+use crate::dtos::mqtt_dto::CreateMqttDTO;
 use crate::dtos::response_dto::ResponseDTO;
 use crate::handler::handler_error::AppError;
 
 pub struct AppState {
-    pub create_user_service: Arc<CreateUserService>,
+    pub create_mqtt_service: Arc<CreateMqttService>,
 }
 
-pub async fn create_user_handler(
+pub async fn create_mqtt_handler(
     data: web::Data<AppState>,
 ) -> impl Responder {
-    match data.create_user_service.create_user() {
+    match data.create_mqtt_service.create_mqtt() {
         Ok((username, password)) => {
-            let dto = CreateUserDTO { username, password };
+            let dto = CreateMqttDTO { username, password };
             HttpResponse::Ok().json(ResponseDTO {
                 success: true,
-                message: "User created successfully",
+                message: "User MQTT created successfully",
                 data: Some(dto),
                 result: None,
             })

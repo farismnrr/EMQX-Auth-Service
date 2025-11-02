@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum UserRepositoryError {
+pub enum MqttRepositoryError {
     #[error("Database error: {0}")]
     Database(#[from] rocksdb::Error),
 

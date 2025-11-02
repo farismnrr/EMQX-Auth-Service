@@ -1,4 +1,4 @@
-Running 10s test @ http://localhost:5500/users
+Running 10s test @ http://localhost:5500/mqtts
   12 threads and 2000 connections
   Thread Stats   Avg      Stdev     Max   +/- Stdev
     Latency    30.34ms    3.26ms  68.77ms   90.16%

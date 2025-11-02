@@ -9,17 +9,17 @@ use crate::middleware::api_key::ApiKeyMiddleware;
 use crate::middleware::powered_by::PoweredByMiddleware;
 use crate::middleware::logger_request::RequestLoggerMiddleware;
 
-use crate::handler::create_user_handler::{create_user_handler, AppState as CreateUserAppState};
-use crate::handler::get_user_list_handler::{get_user_list_handler, AppState as GetListAppState};
-use crate::handler::user_login_handler::{login_with_credentials_handler, AppState as UserLoginAppState};
+use crate::handler::create_mqtt_handler::{create_mqtt_handler, AppState as CreateMqttAppState};
+use crate::handler::get_mqtt_list_handler::{get_mqtt_list_handler, AppState as GetListAppState};
+use crate::handler::mqtt_login_handler::{login_with_credentials_handler, AppState as MqttLoginAppState};
 
-use crate::services::create_user_service::CreateUserService;
-use crate::services::get_user_list_service::GetUserListService;
-use crate::services::user_login_service::UserLoginService;
+use crate::services::create_mqtt_service::CreateMqttService;
+use crate::services::get_mqtt_list_service::GetMqttListService;
+use crate::services::mqtt_login_service::MqttLoginService;
 
-use crate::repositories::create_user_repository::CreateUserRepository;
-use crate::repositories::get_user_list_repository::GetUserListRepository;
-use crate::repositories::user_login_repository::UserLoginRepository;
+use crate::repositories::create_mqtt_repository::CreateMqttRepository;
+use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
+use crate::repositories::mqtt_login_repository::MqttLoginRepository;
 
 async fn healthcheck() -> impl Responder {
     HttpResponse::Ok()
@@ -81,23 +81,23 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     // 🧩 Repository Layer
     // =====================
-    let create_repo = Arc::new(CreateUserRepository::new(Arc::clone(&db)));
-    let list_repo = Arc::new(GetUserListRepository::new(Arc::clone(&db)));
-    let login_repo = Arc::new(UserLoginRepository::new(Arc::clone(&db)));
+    let create_repo = Arc::new(CreateMqttRepository::new(Arc::clone(&db)));
+    let list_repo = Arc::new(GetMqttListRepository::new(Arc::clone(&db)));
+    let login_repo = Arc::new(MqttLoginRepository::new(Arc::clone(&db)));
 
     // =====================
     // 🛠️ Service Layer
     // =====================
-    let create_user_service = Arc::new(CreateUserService::new(Arc::clone(&create_repo)));
-    let get_user_list_service = Arc::new(GetUserListService::new(Arc::clone(&list_repo)));
-    let user_login_service = Arc::new(UserLoginService::new(Arc::clone(&login_repo), secret_key));
+    let create_mqtt_service = Arc::new(CreateMqttService::new(Arc::clone(&create_repo)));
+    let get_mqtt_list_service = Arc::new(GetMqttListService::new(Arc::clone(&list_repo)));
+    let mqtt_login_service = Arc::new(MqttLoginService::new(Arc::clone(&login_repo), secret_key));
 
     // =====================
     // 🚀 App State
     // =====================
-    let create_state = web::Data::new(CreateUserAppState { create_user_service });
-    let list_state = web::Data::new(GetListAppState { get_user_list_service });
-    let login_state = web::Data::new(UserLoginAppState { login_with_credentials_service: user_login_service });
+    let create_state = web::Data::new(CreateMqttAppState { create_mqtt_service });
+    let list_state = web::Data::new(GetListAppState { get_mqtt_list_service });
+    let login_state = web::Data::new(MqttLoginAppState { login_with_credentials_service: mqtt_login_service });
 
     // =====================
     // 🌐 Start Server
@@ -116,14 +116,14 @@ pub async fn run_server() -> std::io::Result<()> {
             // 🩺 Root API — health check
             .route("/", web::get().to(healthcheck))
 
-            // 👥 User endpoints
+            // 👥 Mqtt endpoints
             .service(
-                web::scope("/users")
-                    .route("/create", web::post().to(create_user_handler))
+                web::scope("/mqtt")
+                    .route("/create", web::post().to(create_mqtt_handler))
                     .route("/check", web::post().to(login_with_credentials_handler))
 
                     // Development only
-                    .route("", web::get().to(get_user_list_handler)),
+                    .route("", web::get().to(get_mqtt_list_handler)),
             )
     })
     .bind(("0.0.0.0", 5500))?

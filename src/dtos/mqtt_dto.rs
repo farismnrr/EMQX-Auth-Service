@@ -1,32 +1,32 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
-pub struct UserDTO {
+pub struct MqttDTO {
     pub username: String,
     pub password: String,
     pub is_deleted: bool,
 }
 
 #[derive(Serialize)]
-pub struct GetUserListDTO {
-    pub users: Vec<UserDTO>,
+pub struct GetMqttListDTO {
+    pub mqtts: Vec<MqttDTO>,
 }
 
 #[derive(Serialize)]
-pub struct CreateUserDTO {
+pub struct CreateMqttDTO {
     pub username: String,
     pub password: String,
 }
 
 #[derive(Deserialize)]
-pub struct CheckUserActiveDTO {
+pub struct CheckMqttActiveDTO {
     pub username: String,
     pub password: String,
     pub method: Option<AuthType>,
 }
 
 #[derive(Serialize)]
-pub struct UserJwtDTO {
+pub struct MqttJwtDTO {
     pub token: String,
 }
 
