@@ -13,14 +13,17 @@ pub enum MqttServiceError {
     #[error("Repository error: {0}")]
     Repository(#[from] MqttRepositoryError),
 
-    #[error("Mqtt not found: {0}")]
+    #[error("{0}")]
     MqttNotFound(String),
+
+    #[error("{0}")]
+    InvalidCredentials(String),
+
+    #[error("{0}")]
+    Conflict(String),
 
     #[error("Bad request")]
     BadRequest(Vec<ValidationError>),
-
-    #[error("Invalid credentials: {0}")]
-    InvalidCredentials(String),
 
     #[error("Mqtt is not active or deleted: {0}")]
     MqttNotActive(String),

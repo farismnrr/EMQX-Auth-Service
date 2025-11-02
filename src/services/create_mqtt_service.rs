@@ -1,42 +1,56 @@
 use std::sync::Arc;
-use uuid::Uuid;
 use log::debug;
-use argon2::password_hash::rand_core::{OsRng, RngCore};
 
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
-use crate::services::service_error::MqttServiceError;
+use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
+use crate::services::service_error::{MqttServiceError, ValidationError};
+use crate::dtos::mqtt_dto::CreateMqttDTO;
 use crate::utils::hash_password::hash_password;
 
 pub struct CreateMqttService {
-    repo: Arc<CreateMqttRepository>,
+    repo_create: Arc<CreateMqttRepository>,
+    repo_get: Arc<GetMqttByUsernameRepository>,
 }
 
 impl CreateMqttService {
-    pub fn new(repo: Arc<CreateMqttRepository>) -> Self {
-        Self { repo }
+    pub fn new(repo_create: Arc<CreateMqttRepository>, repo_get: Arc<GetMqttByUsernameRepository>) -> Self {
+        Self { repo_create, repo_get }
     }
 
-    pub fn create_mqtt(&self) -> Result<(String, String), MqttServiceError> {
-        let username = Self::create_username();
-        let password = Self::create_password();
-        let hashed = hash_password(&password);
+    pub fn create_mqtt(&self, dto: CreateMqttDTO) -> Result<(String, String, bool), MqttServiceError> {
+        self.create_mqtt_validation(&dto)?;
         
-        self.repo.create_mqtt(&username, &hashed)?;
-        debug!("[Service | CreateMQTT] User MQTT created successfully: {}", username);
-        Ok((username, password))
+        if self.repo_get.get_by_username(&dto.username)?.is_some() {
+            return Err(MqttServiceError::Conflict("MQTT user already exists".into()));
+        }
+
+        let hashed = hash_password(&dto.password);
+        self.repo_create.create_mqtt(&dto.username, &hashed, dto.is_superuser)?;
+        debug!("[Service | CreateMQTT] User MQTT created successfully: {}", &dto.username);
+        Ok((dto.username, dto.password, dto.is_superuser))
     }
 
-    fn create_username() -> String {
-        debug!("[Service | CreateMQTT] Generating new UUID for username.");
-        format!("{}", Uuid::new_v4())
-    }
-    
-    fn create_password() -> String {
-        let mut buf = [0u8; 32];
-        let mut rng = OsRng;
-        rng.try_fill_bytes(&mut buf).ok();
-        let password = hex::encode(buf);
-        debug!("[Service | CreateMQTT] Generated random password of length {}.", password.len());
-        password
+    fn create_mqtt_validation(&self, dto: &CreateMqttDTO) -> Result<bool, MqttServiceError> {
+        let mut errors = Vec::new();
+        if dto.username.trim().is_empty() {
+            errors.push(ValidationError {
+                field: "username".to_string(),
+                message: "username cannot be empty".to_string(),
+            });
+        }
+
+        if dto.password.trim().is_empty() {
+            errors.push(ValidationError {
+                field: "password".to_string(),
+                message: "password cannot be empty".to_string(),
+            });
+        }
+
+        if !errors.is_empty() {
+            return Err(MqttServiceError::BadRequest(errors));
+        }
+
+        debug!("[Service | CheckMQTTActive] User MQTT input validation passed.");
+        Ok(true)
     }
 }

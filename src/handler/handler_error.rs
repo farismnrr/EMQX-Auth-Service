@@ -24,6 +24,16 @@ pub trait AppError: Sized {
         };
         HttpResponse::build(self.status_code()).json(response)
     }
+
+    fn to_http_response_with_result<T: Serialize>(&self, result: Option<&str>, details: Option<T>) -> HttpResponse {
+        let response = ErrorResponseDTO {
+            success: false,
+            message: &self.message(),
+            result,
+            details,
+        };
+        HttpResponse::build(self.status_code()).json(response)
+    }
 }
 
 impl AppError for MqttRepositoryError {
@@ -44,6 +54,7 @@ impl AppError for MqttServiceError {
             Self::InvalidCredentials(_) => StatusCode::UNAUTHORIZED,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::MqttNotActive(_) => StatusCode::FORBIDDEN,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -54,20 +65,17 @@ impl AppError for MqttServiceError {
             _ => self.to_string(),
         }
     }
-}
 
-pub fn handle_mqtt_login(error: &MqttServiceError) -> HttpResponse {
-    match error {
-        MqttServiceError::BadRequest(errors) => {
-            let response: ErrorResponseDTO<&Vec<ValidationError>> = ErrorResponseDTO {
-                success: false,
-                message: "Validation error",
-                result: Some("deny"),
-                details: Some(errors),
-            };
-            HttpResponse::BadRequest().json(response)
+    fn to_http_response(&self) -> HttpResponse {
+        match self {
+            MqttServiceError::BadRequest(errors) => {
+                self.to_http_response_with_result::<&Vec<ValidationError>>(
+                    Some("deny"),
+                    Some(errors),
+                )
+            }
+            _ => self.to_http_response_with_details::<()>(None),
         }
-        _ => error.to_http_response(),
     }
 }
 

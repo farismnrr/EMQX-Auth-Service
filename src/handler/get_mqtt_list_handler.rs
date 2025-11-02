@@ -14,10 +14,10 @@ pub async fn get_mqtt_list_handler(
     data: web::Data<AppState>,
 ) -> impl Responder {
     match data.get_mqtt_list_service.get_mqtt_list() {
-        Ok(mqtts) => HttpResponse::Ok().json(ResponseDTO {
+        Ok(users) => HttpResponse::Ok().json(ResponseDTO {
             success: true,
             message: "User MQTT list retrieved successfully",
-            data: Some(GetMqttListDTO { mqtts }),
+            data: Some(GetMqttListDTO { users }),
             result: None,
         }),
         Err(e) => e.to_http_response(),

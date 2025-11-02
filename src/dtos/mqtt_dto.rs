@@ -4,22 +4,24 @@ use serde::{Deserialize, Serialize};
 pub struct MqttDTO {
     pub username: String,
     pub password: String,
+    pub is_superuser: bool,
     pub is_deleted: bool,
 }
 
 #[derive(Serialize)]
 pub struct GetMqttListDTO {
-    pub mqtts: Vec<MqttDTO>,
+    pub users: Vec<MqttDTO>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateMqttDTO {
     pub username: String,
     pub password: String,
+    pub is_superuser: bool,
 }
 
 #[derive(Deserialize)]
-pub struct CheckMqttActiveDTO {
+pub struct MqttLoginDTO {
     pub username: String,
     pub password: String,
     pub method: Option<AuthType>,
@@ -35,4 +37,10 @@ pub struct MqttJwtDTO {
 pub enum AuthType {
     Credentials,
     Jwt,
+}
+
+#[derive(Deserialize)]
+pub struct MqttAclDTO {
+    pub username: String,
+    pub topic: String,
 }

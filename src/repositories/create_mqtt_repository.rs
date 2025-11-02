@@ -14,11 +14,11 @@ impl CreateMqttRepository {
         CreateMqttRepository { db }
     }
 
-    pub fn create_mqtt(&self, username: &str, password_hash: &str) -> Result<(), MqttRepositoryError> {
+    pub fn create_mqtt(&self, username: &str, password_hash: &str, is_superuser: bool) -> Result<(), MqttRepositoryError> {
     debug!("[Repository | CreateMQTT] Starting user MQTT creation for username: {}", username);
         
         // Build mqtt entity
-        let mqtt = MqttEntity::create(username, password_hash);
+        let mqtt = MqttEntity::create(username, password_hash, is_superuser);
         let key = format!("mqtt:{}", mqtt.username);
     debug!("[Repository | CreateMQTT] Created user MQTT entity with key: {}", key);
 

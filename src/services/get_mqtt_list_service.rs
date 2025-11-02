@@ -18,6 +18,7 @@ impl GetMqttListService {
         let dto_mqtts: Vec<MqttDTO> = mqtts.into_iter().map(|mqtt| MqttDTO {
             username: mqtt.username,
             password: mqtt.password,
+            is_superuser: mqtt.is_superuser,
             is_deleted: mqtt.is_deleted,
         }).collect();
         debug!("[Service | GetMQTTList] User MQTT list retrieved successfully.");

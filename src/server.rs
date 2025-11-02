@@ -12,14 +12,16 @@ use crate::middleware::logger_request::RequestLoggerMiddleware;
 use crate::handler::create_mqtt_handler::{create_mqtt_handler, AppState as CreateMqttAppState};
 use crate::handler::get_mqtt_list_handler::{get_mqtt_list_handler, AppState as GetListAppState};
 use crate::handler::mqtt_login_handler::{login_with_credentials_handler, AppState as MqttLoginAppState};
+use crate::handler::mqtt_acl_handler::{mqtt_acl_handler, AppState as MqttAclAppState};
 
 use crate::services::create_mqtt_service::CreateMqttService;
 use crate::services::get_mqtt_list_service::GetMqttListService;
 use crate::services::mqtt_login_service::MqttLoginService;
+use crate::services::mqtt_acl_service::MqttAclService;
 
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
-use crate::repositories::mqtt_login_repository::MqttLoginRepository;
+use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 
 async fn healthcheck() -> impl Responder {
     HttpResponse::Ok()
@@ -83,21 +85,23 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     let create_repo = Arc::new(CreateMqttRepository::new(Arc::clone(&db)));
     let list_repo = Arc::new(GetMqttListRepository::new(Arc::clone(&db)));
-    let login_repo = Arc::new(MqttLoginRepository::new(Arc::clone(&db)));
+    let getbyusername_repo = Arc::new(GetMqttByUsernameRepository::new(Arc::clone(&db)));
 
     // =====================
     // 🛠️ Service Layer
     // =====================
-    let create_mqtt_service = Arc::new(CreateMqttService::new(Arc::clone(&create_repo)));
+    let create_mqtt_service = Arc::new(CreateMqttService::new(Arc::clone(&create_repo), Arc::clone(&getbyusername_repo)));
     let get_mqtt_list_service = Arc::new(GetMqttListService::new(Arc::clone(&list_repo)));
-    let mqtt_login_service = Arc::new(MqttLoginService::new(Arc::clone(&login_repo), secret_key));
+    let mqtt_login_service = Arc::new(MqttLoginService::new(Arc::clone(&getbyusername_repo), secret_key));
+    let mqtt_acl_service = Arc::new(MqttAclService::new(Arc::clone(&getbyusername_repo)));
 
     // =====================
     // 🚀 App State
     // =====================
     let create_state = web::Data::new(CreateMqttAppState { create_mqtt_service });
     let list_state = web::Data::new(GetListAppState { get_mqtt_list_service });
-    let login_state = web::Data::new(MqttLoginAppState { login_with_credentials_service: mqtt_login_service });
+    let login_state = web::Data::new(MqttLoginAppState { mqtt_login_service });
+    let acl_state = web::Data::new(MqttAclAppState { mqtt_acl_service });
 
     // =====================
     // 🌐 Start Server
@@ -108,6 +112,7 @@ pub async fn run_server() -> std::io::Result<()> {
             .app_data(create_state.clone())
             .app_data(list_state.clone())
             .app_data(login_state.clone())
+            .app_data(acl_state.clone())
             .wrap(ApiKeyMiddleware)
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
@@ -121,6 +126,7 @@ pub async fn run_server() -> std::io::Result<()> {
                 web::scope("/mqtt")
                     .route("/create", web::post().to(create_mqtt_handler))
                     .route("/check", web::post().to(login_with_credentials_handler))
+                    .route("/acl", web::post().to(mqtt_acl_handler))
 
                     // Development only
                     .route("", web::get().to(get_mqtt_list_handler)),
@@ -140,7 +146,7 @@ pub async fn run_server() -> std::io::Result<()> {
     info!("Shutting down server...");
     drop(create_repo);
     drop(list_repo);
-    drop(login_repo);
+    drop(getbyusername_repo);
 
     info!("Closing RocksDB at {}", db_path);
     close_rocksdb(db);

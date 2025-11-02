@@ -6,16 +6,16 @@ use log::{debug, error};
 use crate::entities::mqtt_entity::MqttEntity;
 use crate::repositories::repository_error::MqttRepositoryError;
 
-pub struct MqttLoginRepository {
+pub struct GetMqttByUsernameRepository {
     db: Arc<DB>,
 }
 
-impl MqttLoginRepository {
+impl GetMqttByUsernameRepository {
     pub fn new(db: Arc<DB>) -> Self {
-        MqttLoginRepository { db }
+        GetMqttByUsernameRepository { db }
     }
 
-    pub fn login_with_credentials(&self, username: &str) -> Result<Option<MqttEntity>, MqttRepositoryError> {
+    pub fn get_by_username(&self, username: &str) -> Result<Option<MqttEntity>, MqttRepositoryError> {
         // Build RocksDB key
         let key: String = format!("mqtt:{}", username);
 

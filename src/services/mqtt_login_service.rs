@@ -1,29 +1,29 @@
 use std::sync::Arc;
 use log::debug;
-use crate::repositories::mqtt_login_repository::MqttLoginRepository;
+use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::dtos::mqtt_dto::{AuthType, CheckMqttActiveDTO};
+use crate::dtos::mqtt_dto::{AuthType, MqttLoginDTO};
 use crate::utils::hash_password::verify_password;
 use crate::utils::jwt_sign::create_jwt;
 
 pub struct MqttLoginService {
-    repo: Arc<MqttLoginRepository>,
+    repo: Arc<GetMqttByUsernameRepository>,
     secret_key: String,
 }
 
 impl MqttLoginService {
-    pub fn new(repo: Arc<MqttLoginRepository>, secret_key: String) -> Self {
+    pub fn new(repo: Arc<GetMqttByUsernameRepository>, secret_key: String) -> Self {
         Self { repo, secret_key }
     }
 
-    pub fn login_with_credentials(&self, dto: CheckMqttActiveDTO) -> Result<(bool, String), MqttServiceError> {
+    pub fn login_with_credentials(&self, dto: MqttLoginDTO) -> Result<(bool, String), MqttServiceError> {
         self.mqtt_input_credentials_validation(&dto)?;
 
-        let mqtt = match self.repo.login_with_credentials(&dto.username)? {
+        let mqtt = match self.repo.get_by_username(&dto.username)? {
             Some(u) => u,
             None => {
                 debug!("[Service | CheckMQTTActive] User MQTT not found: {}", dto.username);
-                return Err(MqttServiceError::MqttNotFound(" User MQTT not found".into()));
+                return Err(MqttServiceError::MqttNotFound("User MQTT not found".into()));
             }
         };
 
@@ -50,8 +50,8 @@ impl MqttLoginService {
             }
         }
     }
-    
-    fn mqtt_input_credentials_validation(&self, dto: &CheckMqttActiveDTO) -> Result<bool, MqttServiceError> {
+
+    fn mqtt_input_credentials_validation(&self, dto: &MqttLoginDTO) -> Result<bool, MqttServiceError> {
         let mut errors = Vec::new();
         if dto.username.trim().is_empty() {
             errors.push(ValidationError {
