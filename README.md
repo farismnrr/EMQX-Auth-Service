@@ -26,7 +26,7 @@ A high-performance authentication and authorization service for MQTT clients in 
 Create a `.env` file:
 
 ```bash
-DB_PATH=./rocksdb-data/iotnet
+DB_PATH=./rocksdb-data/your_db
 SECRET_KEY=<generate-with: make key>
 API_KEY=<generate-with: make key>
 LOG_LEVEL=info
@@ -69,11 +69,11 @@ docker run -d \
   --name auth-module \
   -p 5500:5500 \
   -v ./rocksdb-data:/data \
-  -e DB_PATH=/data \
+  -e DB_PATH=/data/your_db \
   -e SECRET_KEY=<your-secret-key> \
   -e API_KEY=<your-api-key> \
   -e LOG_LEVEL=info \
-  ghcr.io/farismnrr/emqx-auth-module:latest
+  ghcr.io/farismnrr/emqx-auth-module:v0.1.0
 ```
 
 **Or direct execution:**
