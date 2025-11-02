@@ -62,9 +62,9 @@ pub async fn run_server() -> std::io::Result<()> {
             .app_data(create_state.clone())
             .app_data(list_state.clone())
             .app_data(check_state.clone())
+            .wrap(ApiKeyMiddleware)
             .wrap(PoweredByMiddleware)
             .wrap(middleware::Compress::default())
-            .wrap(ApiKeyMiddleware)
             .service(
                 web::scope("/users")
                     .route("/create", web::post().to(create_user_handler))
