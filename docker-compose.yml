@@ -1,39 +1,20 @@
 services:
-  rocksdb:
-    image: rocksdb:latest
-    container_name: rocksdb
-    volumes:
-      - ./rocksdb-data:/data
-    command: ["tail", "-f", "/dev/null"]
-    restart: unless-stopped
-    networks:
-      - iotnet
-
   client-management:
-    image: emqx-auth-module-plugin:latest
+    image: ghcr.io/farismnrr/emqx-auth-module:v0.1.0
     container_name: client-management
     ports:
       - "5500:5500"
-    depends_on:
-      rocksdb:
-        condition: service_started
     environment:
       DB_PATH: ${DB_PATH:-/data}
       SECRET_KEY: ${SECRET_KEY}
       API_KEY: ${API_KEY}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_LEVEL: ${LOG_LEVEL:-info} # Possible values: debug, info, warning, error
     volumes:
-      - ./rocksdb-data:/data
+      - rocksdb_data:/data
     restart: unless-stopped
-    networks:
-      - iotnet
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5500/"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 40s
-
-networks:
-  iotnet:
-    driver: bridge

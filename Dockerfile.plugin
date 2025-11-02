@@ -1,52 +1,67 @@
-# Multi-stage build for EMQX Auth Module Plugin
+# ============================================================
+# 🧩 EMQX Auth Module Plugin — Multi-Stage Dockerfile
+# ============================================================
+# Description:
+#   This Dockerfile builds and runs the Rust-based EMQX HTTP Auth Module
+#   designed for fast authentication and ACL checks with RocksDB integration.
+#
+#   It uses Debian Bookworm in both stages to ensure glibc compatibility
+#   The image follows OCI labeling conventions for better visibility
+#   on registries like GHCR or Docker Hub.
+# ============================================================
 
-# Stage 1: Build stage
-FROM rust:latest AS builder
+# ------------------------------------------------------------
+# 🏗️ Stage 1 — Build Stage
+# ------------------------------------------------------------
+FROM debian:bookworm-slim AS builder
 
-WORKDIR /app
-
-# Install build dependencies required for librocksdb-sys and bindgen
 RUN apt-get update && apt-get install -y \
+    curl \
     build-essential \
     clang \
     libclang-dev \
-    librocksdb-dev \
     pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+    librocksdb-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
 
-# Copy project files
+ENV PATH="/root/.cargo/bin:${PATH}"
+WORKDIR /app
+
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 
-# Build the release binary
 RUN cargo build --release
 
-# Stage 2: Runtime stage
+
+# ------------------------------------------------------------
+# 🚀 Stage 2 — Runtime Stage
+# ------------------------------------------------------------
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
+LABEL org.opencontainers.image.title="EMQX Auth Module Plugin"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.authors="farismnrr <farismunir2@gmail.com>"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.source="https://github.com/farismnrr/client_management"
+LABEL org.opencontainers.image.description="Lightweight Rust-based HTTP Auth Module for EMQX, providing high-performance authentication and ACL logic with RocksDB backend."
+
 RUN apt-get update && apt-get install -y \
     librocksdb-dev \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built binary from builder
 COPY --from=builder /app/target/release/emqx_auth_module /app/emqx_auth_module
 
-# Create non-root user for security
 RUN useradd -m -u 1000 plugin && chown -R plugin:plugin /app
-
 USER plugin
 
-# Expose port
 EXPOSE 5500
 
-# Health check - check the healthcheck endpoint at /
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:5500/ || exit 1
 
-# Default command
 CMD ["/app/emqx_auth_module"]
