@@ -1,8 +1,8 @@
 # ============================================================
-# 🧩 EMQX Auth Module Plugin — Multi-Stage Dockerfile
+# 🧩 EMQX Auth Plugin — Multi-Stage Dockerfile
 # ============================================================
 # Description:
-#   This Dockerfile builds and runs the Rust-based EMQX HTTP Auth Module
+#   This Dockerfile builds and runs the Rust-based EMQX HTTP Auth Plugin
 #   designed for fast authentication and ACL checks with RocksDB integration.
 #
 #   It uses Debian Bookworm in both stages to ensure glibc compatibility
@@ -41,22 +41,16 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
-LABEL org.opencontainers.image.title="EMQX Auth Module Plugin"
-LABEL org.opencontainers.image.version="1.0.0"
-LABEL org.opencontainers.image.authors="farismnrr <farismunir2@gmail.com>"
-LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.source="https://github.com/farismnrr/client_management"
-LABEL org.opencontainers.image.description="Lightweight Rust-based HTTP Auth Module for EMQX, providing high-performance authentication and ACL logic with RocksDB backend."
-
 RUN apt-get update && apt-get install -y \
     librocksdb-dev \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/emqx_auth_module /app/emqx_auth_module
+COPY --from=builder /app/target/release/emqx_auth_plugin /app/emqx_auth_plugin
 
-RUN useradd -m -u 1000 plugin && chown -R plugin:plugin /app
+RUN useradd -m -u 1000 plugin && chown -R plugin:plugin /app && \
+    mkdir -p /data && chown -R plugin:plugin /data
 USER plugin
 
 EXPOSE 5500
@@ -64,4 +58,4 @@ EXPOSE 5500
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:5500/ || exit 1
 
-CMD ["/app/emqx_auth_module"]
+CMD ["/app/emqx_auth_plugin"]
