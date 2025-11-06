@@ -707,7 +707,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "emqx_auth_module"
+name = "emqx_auth_plugin"
 version = "0.1.0"
 dependencies = [
  "actix-web",

@@ -120,17 +120,17 @@ pub async fn run_server() -> std::io::Result<()> {
             .app_data(mqtt_login_state.clone())
             .app_data(mqtt_acl_state.clone())
             .app_data(soft_delete_mqtt_state.clone())
-            .wrap(ApiKeyMiddleware)
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
             .wrap(middleware::Compress::default())
-
+            
             // 🩺 Root API — health check
             .route("/", web::get().to(healthcheck))
-
+            
             // 👥 Mqtt endpoints
             .service(
                 web::scope("/mqtt")
+                    .wrap(ApiKeyMiddleware)
                     .route("/create", web::post().to(create_mqtt_handler))
                     .route("/check", web::post().to(login_with_credentials_handler))
                     .route("/acl", web::post().to(mqtt_acl_handler))

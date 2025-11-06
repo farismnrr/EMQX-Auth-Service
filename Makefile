@@ -3,18 +3,24 @@
 COMPOSE := docker compose
 COMPOSE_FILE := docker-compose.yml
 
-.PHONY: help docker docker\ run docker\ stop docker\ ps run build key
+.PHONY: help docker docker\ run docker\ stop docker\ ps build push key clean
 .DEFAULT_GOAL := help
 
 help:
 	@echo "Usage: make <target>"
 	@echo
-	@echo "Targets:"
-	@echo "  docker run [service...]   Start one or more services (e.g. make docker run rocksdb)"
-	@echo "  docker stop [service...]  Stop one or more services (e.g. make docker stop rocksdb)"
+	@echo "Build & Push:"
+	@echo "  build                     Build locally (Rust + Docker image)"
+	@echo "  push                      Push local image to GHCR"
+	@echo
+	@echo "Docker Services:"
+	@echo "  docker run [service...]   Start one or more services"
+	@echo "  docker stop [service...]  Stop one or more services"
 	@echo "  docker ps [service...]    Show docker compose ps"
-	@echo "  run build                 Build the Rust project and Docker plugin image"
-	@echo "  key                       Generate a random SHA256 hash"
+	@echo
+	@echo "Utilities:"
+	@echo "  key                       Generate SHA256 hash"
+	@echo "  clean                     Clean build artifacts"
 
 # Docker management
 docker:
@@ -52,11 +58,21 @@ docker\ ps:
 
 # Build project and Docker plugin
 build:
-	@echo "Building Docker plugin image (includes Rust build)..."
 	@bash autobuild.sh
+
+# Push to GHCR (no rebuild, just push local image)
+push:
+	@bash autobuild.sh --push
 
 # Generate random SHA256 hash
 key:
 	@echo "Generated SHA256 hash:"
 	@openssl rand -hex 32 | sha256sum | awk '{print $$1}'
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	@cargo clean
+	@docker rmi emqx-auth-plugin:latest 2>/dev/null || true
+	@echo "✓ Clean complete"
 

@@ -1,11 +1,11 @@
-# EMQX Authentication Module - Client Management Service
+# EMQX Auth Plugin - Client Management Service
 
 A high-performance authentication and authorization service for MQTT clients in the IoTNet ecosystem. Built with Rust and Actix-web.
 
 ## Features
 
 - MQTT client credential management (create, list, delete)
-- Client authentication with Argon2 password hashing
+- Client authentication with fast password hashing
 - JWT token generation for authenticated sessions
 - Access Control List (ACL) validation
 - RocksDB persistence for high-performance data storage
@@ -46,7 +46,7 @@ make key
 make build
 ```
 
-This creates a local Docker image: `emqx-auth-module-plugin:latest`
+This creates a local Docker image: `emqx-auth-plugin:latest`
 
 **Or build directly with Cargo:**
 
@@ -66,14 +66,14 @@ docker compose up -d
 
 ```bash
 docker run -d \
-  --name auth-module \
+  --name auth-plugin \
   -p 5500:5500 \
   -v ./rocksdb-data:/data \
   -e DB_PATH=/data/your_db \
   -e SECRET_KEY=<your-secret-key> \
   -e API_KEY=<your-api-key> \
   -e LOG_LEVEL=info \
-  ghcr.io/farismnrr/emqx-auth-module:v0.1.0
+  ghcr.io/farismnrr/emqx-auth-plugin:v0.1.0
 ```
 
 **Or direct execution:**
@@ -110,8 +110,8 @@ POST /mqtt/create
 Content-Type: application/json
 
 {
-  "username": "client_name",
-  "password": "client_password",
+  "username": "<client_name>",
+  "password": "<client_password>",
   "is_superuser": false
 }
 
@@ -139,13 +139,38 @@ Response: 200 OK
 
 ### Authenticate Client
 
+The `/mqtt/check` endpoint supports two authentication methods:
+
+#### Method 1: Credentials Authentication
+
 ```
 POST /mqtt/check
 Content-Type: application/json
 
 {
-  "username": "client_name",
-  "password": "client_password"
+  "username": "<client_name>",
+  "password": "<client_password>",
+  "method": "credentials"
+}
+
+Response: 200 OK
+{
+  "success": true,
+  "message": "User MQTT is active",
+  "result": "allow"
+}
+```
+
+#### Method 2: JWT Authentication
+
+```
+POST /mqtt/check
+Content-Type: application/json
+
+{
+  "username": "<client_name>",
+  "password": "",
+  "method": "jwt"
 }
 
 Response: 200 OK
@@ -154,7 +179,7 @@ Response: 200 OK
   "message": "User MQTT is active",
   "result": "allow",
   "data": {
-    "token": "jwt_token"
+    "token": "<jwt_token_here>"
   }
 }
 ```
@@ -166,8 +191,8 @@ POST /mqtt/acl
 Content-Type: application/json
 
 {
-  "username": "client_name",
-  "topic": "topic_name"
+  "username": "<client_name>",
+  "topic": "<topic_name>"
 }
 
 Response: 200 OK
@@ -181,7 +206,7 @@ Response: 200 OK
 ### Delete MQTT Client
 
 ```
-DELETE /mqtt/{username}
+DELETE /mqtt/{<client_name>}
 
 Response: 200 OK
 {
@@ -192,12 +217,12 @@ Response: 200 OK
 
 ## Environment Variables
 
-| Variable     | Description                       | Required |
-| ------------ | --------------------------------- | -------- |
-| `DB_PATH`    | RocksDB data directory path       | Yes      |
-| `SECRET_KEY` | SHA256 hash for JWT signing       | Yes      |
-| `API_KEY`    | API key for request authentication| Yes      |
-| `LOG_LEVEL`  | Logging level (info, debug, warn) | No       |
+| Variable     | Description                        | Required |
+| ------------ | ---------------------------------- | -------- |
+| `DB_PATH`    | RocksDB data directory path        | Yes      |
+| `SECRET_KEY` | SHA256 hash for JWT signing        | Yes      |
+| `API_KEY`    | API key for request authentication | Yes      |
+| `LOG_LEVEL`  | Logging level (info, debug, warn)  | No       |
 
 ## Make Commands
 
