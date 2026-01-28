@@ -5,10 +5,10 @@
 //! - `init_rocksdb(path: &str) -> Result<Arc<rocksdb::DB>, rocksdb::Error>` convenience
 //! - `close_rocksdb(db: Arc<rocksdb::DB>)` convenience
 
-use rocksdb::{Options, DB, Error};
+use log::debug;
+use rocksdb::{DB, Error, Options};
 use std::path::Path;
 use std::sync::Arc;
-use log::debug;
 
 /// Convenience: initialize RocksDB and return an `Arc<DB>` directly.
 ///

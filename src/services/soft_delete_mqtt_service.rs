@@ -23,7 +23,7 @@ impl SoftDeleteMqttService {
     pub async fn soft_delete_mqtt(&self, username: &str) -> Result<bool, MqttServiceError> {
         self.validate_username(username)?;
 
-        let _mqtt = match self.repo_get.get_by_username(&username).await? {
+        let _mqtt = match self.repo_get.get_by_username(username).await? {
             Some(u) => u,
             None => {
                 debug!(

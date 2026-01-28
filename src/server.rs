@@ -16,6 +16,7 @@ use crate::handler::mqtt_acl_handler::mqtt_acl_handler;
 use crate::handler::mqtt_login_handler::login_with_credentials_handler;
 use crate::handler::soft_delete_mqtt_handler::soft_delete_mqtt;
 
+use crate::repositories::cache_repository::CacheRepository;
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
@@ -73,7 +74,7 @@ pub async fn run_server() -> std::io::Result<()> {
     info!("🟢 Logging initialized successfully");
 
     // =====================
-    // 🗄️ Database Initialization (Postgres + RocksDB)
+    // 🗄️ Database Initialization
     // =====================
     let pg_pool = Arc::new(postgres::connect().await);
     info!("🟢 Postgres connection pool established");
@@ -84,24 +85,34 @@ pub async fn run_server() -> std::io::Result<()> {
         .await
         .map_err(|e| {
             error!("❌ Migration failed: {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, "Migration failed")
+            std::io::Error::other("Migration failed")
         })?;
     info!("✅ Database migrations applied successfully");
 
-    // We still init RocksDB for cache, though not strictly required if we only use Postgres now.
-    // However, since we might want to keep the option or use it for other things:
     let rocksdb = init_rocksdb(&db_path).map_err(|e| {
         error!("❌ Failed to initialize RocksDB at {}: {}", db_path, e);
-        std::io::Error::new(std::io::ErrorKind::Other, "Failed to initialize RocksDB")
+        std::io::Error::other("Failed to initialize RocksDB")
     })?;
+    info!("🟢 RocksDB (Cache) initialized successfully at {}", db_path);
 
     // =====================
     // 🧩 Repository Layer
     // =====================
-    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(Arc::clone(&pg_pool)));
+    let cache_repo = Arc::new(CacheRepository::new(Arc::clone(&rocksdb)));
+
+    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(
+        Arc::clone(&pg_pool),
+        Arc::clone(&cache_repo),
+    ));
     let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(Arc::clone(&pg_pool)));
-    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(Arc::clone(&pg_pool)));
-    let soft_delete_mqtt_repo = Arc::new(SoftDeleteMqttRepository::new(Arc::clone(&pg_pool)));
+    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(
+        Arc::clone(&pg_pool),
+        Arc::clone(&cache_repo),
+    ));
+    let soft_delete_mqtt_repo = Arc::new(SoftDeleteMqttRepository::new(
+        Arc::clone(&pg_pool),
+        Arc::clone(&cache_repo),
+    ));
 
     // =====================
     // 🛠️ Service Layer

@@ -1,3 +1,4 @@
+pub mod cache_repository;
 pub mod repository_error;
 
 // Refactored Repositories (Postgres-Backed)
