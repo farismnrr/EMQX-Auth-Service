@@ -1,32 +1,14 @@
-use actix_web::{web, HttpResponse, Responder};
-use std::sync::Arc;
-
-use crate::services::create_mqtt_service::CreateMqttService;
-use crate::services::service_error::MqttServiceError;
 use crate::dtos::mqtt_dto::CreateMqttDTO;
-use crate::dtos::response_dto::ResponseDTO;
 use crate::handler::handler_error::AppError;
-
-pub struct AppState {
-    pub create_mqtt_service: Arc<CreateMqttService>,
-}
+use crate::services::create_mqtt_service::CreateMqttService;
+use actix_web::{HttpResponse, Responder, web};
 
 pub async fn create_mqtt_handler(
-    data: web::Data<AppState>,
-    body: web::Json<CreateMqttDTO>,
+    service: web::Data<CreateMqttService>,
+    req_body: web::Json<CreateMqttDTO>,
 ) -> impl Responder {
-    match data.create_mqtt_service.create_mqtt(body.into_inner()) {
-        Ok(_) => HttpResponse::Ok().json(ResponseDTO::<()> {
-            success: true,
-            message: "User mqtt created successfully",
-            data: None,
-            result: None
-        }),
-        Err(e) => match &e {
-            MqttServiceError::BadRequest(validation_errors) => {
-                e.to_http_response_with_details(Some(validation_errors))
-            }
-            _ => e.to_http_response_with_details(None::<String>),
-        },
+    match service.create_mqtt(req_body.into_inner()).await {
+        Ok(_) => HttpResponse::Created().json(serde_json::json!({ "message": "User created" })),
+        Err(e) => AppError::to_http_response(&e),
     }
 }

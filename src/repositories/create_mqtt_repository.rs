@@ -1,55 +1,45 @@
-use rocksdb::{DB, WriteOptions};
-use std::sync::Arc;
-use bincode::{encode_to_vec, config::standard};
-use log::{debug, error};
-use crate::entities::mqtt_entity::MqttEntity;
 use crate::repositories::repository_error::MqttRepositoryError;
+use log::{debug, error, info};
+use sqlx::PgPool;
+use std::sync::Arc;
 
 pub struct CreateMqttRepository {
-    db: Arc<DB>,
+    pool: Arc<PgPool>,
 }
 
 impl CreateMqttRepository {
-    pub fn new(db: Arc<DB>) -> Self {
-        CreateMqttRepository { db }
+    pub fn new(pool: Arc<PgPool>) -> Self {
+        CreateMqttRepository { pool }
     }
 
-    pub fn create_mqtt(&self, username: &str, password_hash: &str, is_superuser: bool) -> Result<(), MqttRepositoryError> {
-    debug!("[Repository | CreateMQTT] Starting user MQTT creation for username: {}", username);
-        
-        // Build mqtt entity
-        let mqtt = MqttEntity::create(username, password_hash, is_superuser);
-        let key = format!("mqtt:{}", mqtt.username);
-    debug!("[Repository | CreateMQTT] Created user MQTT entity with key: {}", key);
+    pub async fn create_mqtt(
+        &self,
+        username: &str,
+        password_hash: &str,
+        is_superuser: bool,
+    ) -> Result<(), MqttRepositoryError> {
+        debug!(
+            "[Repository | CreateMQTT] Starting user creation for: {}",
+            username
+        );
 
-        // Encode mqtt to binary
-        let value = match encode_to_vec(&mqtt, standard()) {
-            Ok(v) => {
-                debug!("[Repository | CreateMQTT] Successfully encoded user MQTT to binary, size: {} bytes", v.len());
-                v
-            }
-            Err(e) => {
-                error!("[Repository | CreateMQTT] Failed to serialize user MQTT {}: {e}", username);
-                return Err(MqttRepositoryError::Encode(e));
-            }
-        };
+        sqlx::query(
+            "INSERT INTO mqtt_users (username, password_hash, is_superuser, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())"
+        )
+        .bind(username)
+        .bind(password_hash)
+        .bind(is_superuser)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+             error!("[Repository | CreateMQTT] Failed to create user {}: {}", username, e);
+             MqttRepositoryError::Postgres(e)
+        })?;
 
-        // Configure write options for performance tuning
-        let mut opts: WriteOptions = WriteOptions::default();
-        opts.set_sync(false);
-        opts.disable_wal(true);
-    debug!("[Repository | CreateMQTT] Write options configured: sync=false, wal=disabled");
-
-        // Write to RocksDB
-        match self.db.put_opt(key.as_bytes(), value, &opts) {
-            Ok(_) => {
-                debug!("[Repository | CreateMQTT] User MQTT {} successfully written to database", username);
-                Ok(())
-            }
-            Err(e) => {
-                error!("[Repository | CreateMQTT] Failed to write user MQTT {} to database: {e}", username);
-                Err(MqttRepositoryError::Database(e))
-            }
-        }
+        info!(
+            "[Repository | CreateMQTT] Successfully created user {}",
+            username
+        );
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
-use thiserror::Error;
-use serde::Serialize;
 use crate::repositories::repository_error::MqttRepositoryError;
+use serde::Serialize;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationError {
@@ -24,9 +24,6 @@ pub enum MqttServiceError {
 
     #[error("Bad request")]
     BadRequest(Vec<ValidationError>),
-
-    #[error("{0}")]
-    MqttNotActive(String),
 
     #[error("JWT error: {0}")]
     JwtError(String),

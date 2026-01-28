@@ -8,9 +8,10 @@ services:
       DB_PATH: ${DB_PATH:-/data}
       SECRET_KEY: ${SECRET_KEY}
       API_KEY: ${API_KEY}
-      LOG_LEVEL: ${LOG_LEVEL:-info} # Possible values: debug, info, warning, error
-    volumes:
-      - rocksdb_data:/data
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL}
+    networks:
+      - postgres-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5500/"]
@@ -19,5 +20,7 @@ services:
       retries: 3
       start_period: 40s
 
-volumes:
-  rocksdb_data:
+networks:
+  postgres-network:
+    name: postgres_postgres-network
+    external: true

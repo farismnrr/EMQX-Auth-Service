@@ -1,0 +1,25 @@
+services:
+  emqx-auth-plugin-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: emqx-auth-plugin-dev
+    ports:
+      - "5500:5500"
+    environment:
+      DB_PATH: /data
+      SECRET_KEY: ${SECRET_KEY:-dev_secret}
+      API_KEY: ${API_KEY:-dev_api_key}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      RUST_LOG: debug
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres-sql:5432/postgres}
+    networks:
+      - postgres-network
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+networks:
+  postgres-network:
+    name: postgres_postgres-network
+    external: true

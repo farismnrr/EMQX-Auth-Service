@@ -1,40 +1,46 @@
-use std::sync::Arc;
-use log::debug;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::repositories::soft_delete_mqtt_repository::SoftDeleteMqttRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
+use log::debug;
+use std::sync::Arc;
 
 pub struct SoftDeleteMqttService {
     repo_get: Arc<GetMqttByUsernameRepository>,
-    repo_delete: Arc<SoftDeleteMqttRepository>
+    repo_delete: Arc<SoftDeleteMqttRepository>,
 }
 
 impl SoftDeleteMqttService {
     pub fn new(
         repo_get: Arc<GetMqttByUsernameRepository>,
-        repo_delete: Arc<SoftDeleteMqttRepository>
+        repo_delete: Arc<SoftDeleteMqttRepository>,
     ) -> SoftDeleteMqttService {
-        Self { repo_get, repo_delete }
+        Self {
+            repo_get,
+            repo_delete,
+        }
     }
 
-    pub fn soft_delete_mqtt(&self, username: &str) -> Result<bool, MqttServiceError> {
+    pub async fn soft_delete_mqtt(&self, username: &str) -> Result<bool, MqttServiceError> {
         self.validate_username(username)?;
 
-        let mqtt = match self.repo_get.get_by_username(&username)? {
+        let _mqtt = match self.repo_get.get_by_username(&username).await? {
             Some(u) => u,
             None => {
-                debug!("[Service | SoftDeleteMQTT] User MQTT not found: {}", username);
+                debug!(
+                    "[Service | SoftDeleteMQTT] User MQTT not found: {}",
+                    username
+                );
                 return Err(MqttServiceError::MqttNotFound("User MQTT not found".into()));
             }
         };
 
-        if mqtt.is_deleted {
-            debug!("[Service | SoftDeleteMQTT] User MQTT is deleted or inactive: {}", username);
-            return Err(MqttServiceError::MqttNotActive("User MQTT is not active or deleted".into()));
-        }
+        // Removed is_deleted check (Hard deletion for now)
 
-        self.repo_delete.soft_delete(mqtt)?;
-        debug!("[Service | SoftDeleteMQTT] Successfully soft deleted user MQTT: {}", username);
+        self.repo_delete.soft_delete_mqtt(username).await?;
+        debug!(
+            "[Service | SoftDeleteMQTT] Successfully soft deleted user MQTT: {}",
+            username
+        );
         Ok(true)
     }
 

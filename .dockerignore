@@ -1,0 +1,7 @@
+target/
+**/*.rs.bk
+.git/
+.env*
+! .env.example
+! .env.dev
+! .env.production

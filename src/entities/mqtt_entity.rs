@@ -1,20 +1,15 @@
-use bincode::{Encode, Decode};
+use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct MqttEntity {
     pub username: String,
-    pub password: String,
-    pub is_deleted: bool,
+    pub password_hash: String,
     pub is_superuser: bool,
+    pub client_id: Option<String>,
+    // Removed is_deleted as we are using Hard Delete for now in Postgres
 }
 
 impl MqttEntity {
-    pub fn create(username: impl Into<String>, password: impl Into<String>, is_superuser: impl Into<bool>) -> Self {
-        MqttEntity {
-            username: username.into(),
-            password: password.into(),
-            is_deleted: false,
-            is_superuser: is_superuser.into(),
-        }
-    }
+    // Methods can be added here as needed
 }

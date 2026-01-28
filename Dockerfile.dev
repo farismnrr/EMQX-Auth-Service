@@ -1,0 +1,45 @@
+
+FROM rust:bookworm
+
+WORKDIR /app
+
+# Install build dependencies with cache mount
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libclang-dev \
+    clang \
+    cmake \
+    make \
+    curl \
+    librocksdb-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-watch with cache mount
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo install cargo-watch
+
+# Pre-build dependencies for caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy source files
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && \
+    echo "pub fn lib() {}" > src/lib.rs
+
+# Build dependencies with cache mount
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build 2>/dev/null || true
+
+# Clean up dummy files
+RUN rm -rf src target/debug/.fingerprint/emqx_auth_plugin*
+
+# Copy actual source code
+COPY . .
+
+# Run with cargo watch
+CMD ["cargo", "watch", "-x", "run"]

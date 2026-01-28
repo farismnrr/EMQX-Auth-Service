@@ -27,11 +27,6 @@ pub struct MqttLoginDTO {
     pub method: Option<AuthType>,
 }
 
-#[derive(Serialize)]
-pub struct MqttJwtDTO {
-    pub token: String,
-}
-
 #[derive(Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthType {
@@ -43,9 +38,4 @@ pub enum AuthType {
 pub struct MqttAclDTO {
     pub username: String,
     pub topic: String,
-}
-
-#[derive(Deserialize)]
-pub struct DeleteMqttDTO {
-    pub username: String,
 }

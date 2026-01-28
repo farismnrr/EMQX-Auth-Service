@@ -1,43 +1,24 @@
-use actix_web::{web, HttpResponse, Responder};
-use std::sync::Arc;
-
-use crate::services::mqtt_login_service::MqttLoginService;
-use crate::services::service_error::MqttServiceError;
-use crate::dtos::mqtt_dto::{MqttLoginDTO, MqttJwtDTO};
-use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::mqtt_dto::MqttLoginDTO;
 use crate::handler::handler_error::AppError;
-
-pub struct AppState {
-    pub mqtt_login_service: Arc<MqttLoginService>,
-}
+use crate::services::mqtt_login_service::MqttLoginService;
+use actix_web::{HttpResponse, Responder, web};
+use log::debug;
 
 pub async fn login_with_credentials_handler(
-    data: web::Data<AppState>,
-    body: web::Json<MqttLoginDTO>,
+    service: web::Data<MqttLoginService>,
+    req_body: web::Json<MqttLoginDTO>,
 ) -> impl Responder {
-    match data.mqtt_login_service.login_with_credentials(body.into_inner()) {
-        Ok((_, token)) => {
+    debug!("Checking credentials for: {}", req_body.username);
+
+    match service.login_with_credentials(req_body.into_inner()).await {
+        Ok((true, token)) => {
             if token.is_empty() {
-                HttpResponse::Ok().json(ResponseDTO::<()> {
-                    success: true,
-                    message: "User MQTT is active",
-                    data: None,
-                    result: Some("allow"),
-                })
+                HttpResponse::Ok().json(serde_json::json!({ "result": "allow" }))
             } else {
-                HttpResponse::Ok().json(ResponseDTO::<MqttJwtDTO> {
-                    success: true,
-                    message: "User MQTT is active",
-                    data: Some(MqttJwtDTO { token }),
-                    result: Some("allow"),
-                })
+                HttpResponse::Ok().json(serde_json::json!({ "result": "allow", "token": token }))
             }
-        },
-        Err(e) => match &e {
-            MqttServiceError::BadRequest(validation_errors) => {
-                e.to_http_response_with_result(Some("deny"), Some(validation_errors))
-            }
-            _ => e.to_http_response_with_result(Some("deny"), None::<String>),
-        },
+        }
+        Ok((false, _)) => HttpResponse::Ok().json(serde_json::json!({ "result": "deny" })),
+        Err(e) => AppError::to_http_response(&e),
     }
 }

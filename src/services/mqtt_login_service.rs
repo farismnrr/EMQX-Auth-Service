@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use log::debug;
+use crate::dtos::mqtt_dto::{AuthType, MqttLoginDTO};
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::dtos::mqtt_dto::{AuthType, MqttLoginDTO};
 use crate::utils::hash_password::verify_password;
 use crate::utils::jwt_sign::create_jwt;
+use log::debug;
+use std::sync::Arc;
 
 pub struct MqttLoginService {
     repo: Arc<GetMqttByUsernameRepository>,
@@ -16,28 +16,37 @@ impl MqttLoginService {
         Self { repo, secret_key }
     }
 
-    pub fn login_with_credentials(&self, dto: MqttLoginDTO) -> Result<(bool, String), MqttServiceError> {
+    pub async fn login_with_credentials(
+        &self,
+        dto: MqttLoginDTO,
+    ) -> Result<(bool, String), MqttServiceError> {
         self.mqtt_input_credentials_validation(&dto)?;
 
-        let mqtt = match self.repo.get_by_username(&dto.username)? {
+        let mqtt = match self.repo.get_by_username(&dto.username).await? {
             Some(u) => u,
             None => {
-                debug!("[Service | CheckMQTTActive] User MQTT not found: {}", dto.username);
+                debug!(
+                    "[Service | CheckMQTTActive] User MQTT not found: {}",
+                    dto.username
+                );
                 return Err(MqttServiceError::MqttNotFound("User MQTT not found".into()));
             }
         };
 
-        if mqtt.is_deleted {
-            debug!("[Service | CheckMQTTActive] User MQTT is deleted or inactive: {}", dto.username);
-            return Err(MqttServiceError::MqttNotActive("User MQTT is not active or deleted".into()));
-        }
+        // Note: Soft delete logic removed as Postgres implementation uses Hard Delete for now.
+        // If soft delete is restored (is_deleted column), uncomment check here.
 
         match dto.method.unwrap() {
             AuthType::Credentials => {
-                let is_valid = verify_password(&dto.password, &mqtt.password);
+                let is_valid = verify_password(&dto.password, &mqtt.password_hash);
                 if !is_valid {
-                    debug!("[Service | CheckMQTTActive] Invalid credentials for user MQTT: {}", dto.username);
-                    return Err(MqttServiceError::InvalidCredentials("Invalid credentials".into()));
+                    debug!(
+                        "[Service | CheckMQTTActive] Invalid credentials for user MQTT: {}",
+                        dto.username
+                    );
+                    return Err(MqttServiceError::InvalidCredentials(
+                        "Invalid credentials".into(),
+                    ));
                 }
 
                 Ok((true, String::new()))
@@ -45,13 +54,19 @@ impl MqttLoginService {
             AuthType::Jwt => {
                 let token = create_jwt(&dto.username, &self.secret_key)
                     .map_err(|e| MqttServiceError::JwtError(e.to_string()))?;
-                debug!("[Service | CheckMQTTActive] JWT token created for user MQTT: {}", dto.username);
+                debug!(
+                    "[Service | CheckMQTTActive] JWT token created for user MQTT: {}",
+                    dto.username
+                );
                 Ok((true, token))
             }
         }
     }
 
-    fn mqtt_input_credentials_validation(&self, dto: &MqttLoginDTO) -> Result<bool, MqttServiceError> {
+    fn mqtt_input_credentials_validation(
+        &self,
+        dto: &MqttLoginDTO,
+    ) -> Result<bool, MqttServiceError> {
         let mut errors = Vec::new();
         if dto.username.trim().is_empty() {
             errors.push(ValidationError {
