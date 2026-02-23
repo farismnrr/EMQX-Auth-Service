@@ -178,16 +178,18 @@ print_info "🔨 Building Docker image with buildx..."
 echo ""
 
 # Build flags based on PUSH_TO_REGISTRY
-BUILD_FLAGS="--platform $BUILD_PLATFORMS"
-BUILD_FLAGS="$BUILD_FLAGS --label org.opencontainers.image.title=\"$IMAGE_TITLE\""
-BUILD_FLAGS="$BUILD_FLAGS --label org.opencontainers.image.description=\"$IMAGE_DESCRIPTION\""
-BUILD_FLAGS="$BUILD_FLAGS --label org.opencontainers.image.authors=\"$IMAGE_AUTHORS\""
-BUILD_FLAGS="$BUILD_FLAGS --label org.opencontainers.image.version=\"$IMAGE_VERSION\""
-BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.title=\"$IMAGE_TITLE\""
-BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.description=\"$IMAGE_DESCRIPTION\""
-BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.source=\"$IMAGE_SOURCE\""
-BUILD_FLAGS="$BUILD_FLAGS -f Dockerfile"
-BUILD_FLAGS="$BUILD_FLAGS --progress=plain"
+BUILD_ARGS=(
+    --platform "$BUILD_PLATFORMS"
+    --label "org.opencontainers.image.title=$IMAGE_TITLE"
+    --label "org.opencontainers.image.description=$IMAGE_DESCRIPTION"
+    --label "org.opencontainers.image.authors=$IMAGE_AUTHORS"
+    --label "org.opencontainers.image.version=$IMAGE_VERSION"
+    --annotation "org.opencontainers.image.title=$IMAGE_TITLE"
+    --annotation "org.opencontainers.image.description=$IMAGE_DESCRIPTION"
+    --annotation "org.opencontainers.image.source=$IMAGE_SOURCE"
+    -f "Dockerfile"
+    --progress=plain
+)
 
 if [ "$PUSH_TO_REGISTRY" = true ]; then
     print_info "🔐 Push to registry is enabled. Loading configuration..."
@@ -219,7 +221,7 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     
     # Defaults if not in .env
     GHCR_USERNAME="${GHCR_USERNAME:-farismnrr}"
-    GHCR_NAMESPACE="${GHCR_NAMESPACE:-i-otnet}"
+    GHCR_NAMESPACE="farismnrr"
     PUSH_IMAGE_NAME="emqx-auth-service"
     REGISTRY="ghcr.io"
     FULL_REGISTRY_PATH="${REGISTRY}/${GHCR_NAMESPACE}/${PUSH_IMAGE_NAME}"
@@ -312,7 +314,7 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     fi
     
     # Create or use existing buildx builder
-    BUILDER_NAME="iotnet-builder"
+    BUILDER_NAME="emqx-service-builder"
     if ! docker buildx inspect ${BUILDER_NAME} &> /dev/null; then
         print_info "Creating new buildx builder: ${BUILDER_NAME}"
         docker buildx create --name ${BUILDER_NAME} --use --bootstrap
@@ -322,13 +324,13 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     fi
     echo ""
     
-    BUILD_FLAGS="$BUILD_FLAGS -t ${FULL_IMAGE_NAME} --push"
+    BUILD_ARGS+=("-t" "${FULL_IMAGE_NAME}" "--push")
 else
-    BUILD_FLAGS="$BUILD_FLAGS -t ${LOCAL_IMAGE}"
+    BUILD_ARGS+=("-t" "${LOCAL_IMAGE}")
 fi
 
 # Build with docker buildx
-eval "docker buildx build $BUILD_FLAGS ."
+docker buildx build "${BUILD_ARGS[@]}" .
 
 if [ $? -eq 0 ]; then
     if [ "$PUSH_TO_REGISTRY" = true ]; then
