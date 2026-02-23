@@ -102,6 +102,6 @@ kill:
 clean:
 	@echo "Cleaning build artifacts..."
 	@cargo clean
-	@docker rmi emqx-auth-plugin:latest 2>/dev/null || true
+	@docker rmi emqx-auth-service:latest 2>/dev/null || true
 	@echo "✓ Clean complete"
 

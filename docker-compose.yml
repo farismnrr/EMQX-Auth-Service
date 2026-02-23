@@ -1,7 +1,7 @@
 services:
-  emqx-auth-plugin:
-    image: ghcr.io/farismnrr/emqx-auth-plugin:latest
-    container_name: emqx-auth-plugin
+  emqx-auth-service:
+    image: ghcr.io/farismnrr/emqx-auth-service:latest
+    container_name: emqx-auth-service
     ports:
       - "5500:5500"
     environment:

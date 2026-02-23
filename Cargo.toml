@@ -2,7 +2,7 @@
 members = [".", "migration"]
 
 [package]
-name = "emqx_auth_plugin"
+name = "emqx_auth_service"
 version = "0.1.0"
 edition = "2024"
 

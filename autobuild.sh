@@ -44,16 +44,16 @@ print_table_row() {
 
 echo ""
 print_header "╔════════════════════════════════════════════════════════════════╗"
-print_header "║              AutoBuild: EMQX Auth Plugin                       ║"
+print_header "║              AutoBuild: EMQX Auth Service                      ║"
 print_header "║   Rust Project + Docker Image Build & Validation               ║"
 print_header "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 print_info "📦 Build Information:"
-print_info "  Repository: EMQX Auth Plugin"
+print_info "  Repository: EMQX Auth Service"
 print_info "  Language: Rust"
 print_info "  Container: Docker (Debian Bookworm)"
 print_info "  Backend: Rust Actix"
-print_info "  Database: RocksDB"
+print_info "  Database: MySQL"
 echo ""
 
 # Parse arguments
@@ -142,17 +142,17 @@ echo "========================================="
 echo ""
 
 # Build configuration
-IMAGE_NAME="emqx-auth-plugin"
+IMAGE_NAME="emqx-auth-service"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 LOCAL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 REGISTRY_IMAGE="ghcr.io/farismnrr/${IMAGE_NAME}:${IMAGE_TAG}"
 
 # Metadata
-IMAGE_TITLE="EMQX Auth Plugin"
+IMAGE_TITLE="EMQX Auth Service"
 IMAGE_VERSION=""
 IMAGE_AUTHORS="farismnrr"
-IMAGE_DESCRIPTION="Lightweight Rust-based HTTP Auth Plugin for EMQX, providing high-performance authentication and ACL logic with RocksDB backend."
-IMAGE_SOURCE="https://github.com/farismnrr/EMQX-Auth-Plugin"
+IMAGE_DESCRIPTION="Lightweight Rust-based HTTP Auth Service for EMQX, providing high-performance authentication and ACL logic with MySQL backend."
+IMAGE_SOURCE="https://github.com/farismnrr/EMQX-Auth-Service"
 BUILD_PLATFORMS="linux/amd64,linux/arm64"
 
 print_info "🐳 Docker BuildX Configuration:"
@@ -220,7 +220,7 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     # Defaults if not in .env
     GHCR_USERNAME="${GHCR_USERNAME:-farismnrr}"
     GHCR_NAMESPACE="${GHCR_NAMESPACE:-i-otnet}"
-    PUSH_IMAGE_NAME="emqx-auth-plugin"
+    PUSH_IMAGE_NAME="emqx-auth-service"
     REGISTRY="ghcr.io"
     FULL_REGISTRY_PATH="${REGISTRY}/${GHCR_NAMESPACE}/${PUSH_IMAGE_NAME}"
     

@@ -1,4 +1,4 @@
-# EMQX Auth Plugin - Client Management Service
+# EMQX Auth Service - Client Management Service
 
 A high-performance authentication and authorization service for MQTT clients in the IoTNet ecosystem. Built with Rust and Actix-web.
 
@@ -46,7 +46,7 @@ make key
 make build
 ```
 
-This creates a local Docker image: `emqx-auth-plugin:latest`
+This creates a local Docker image: `emqx-auth-service:latest`
 
 **Or build directly with Cargo:**
 
@@ -73,7 +73,7 @@ docker run -d \
   -e SECRET_KEY=<your-secret-key> \
   -e API_KEY=<your-api-key> \
   -e LOG_LEVEL=info \
-  ghcr.io/farismnrr/emqx-auth-plugin:v0.1.0
+  ghcr.io/farismnrr/emqx-auth-service:v0.1.0
 ```
 
 **Or direct execution:**
