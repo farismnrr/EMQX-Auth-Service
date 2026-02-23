@@ -1,0 +1,5 @@
+fix: Correct Dockerfile reference and final terminology in autobuild.sh
+
+- Fixed hardcoded Dockerfile.plugin check.
+- Updated remaining 'plugin' references to 'service' in comments and metadata.
+- Standardized runtime user info in build output.
