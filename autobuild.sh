@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AutoBuild Script for EMQX Auth Plugin
+# AutoBuild Script for EMQX Auth Service
 # Build & optionally push Rust project + Docker image to GHCR
 # Usage: ./autobuild.sh [--push] [--no-test]
 # Example: ./autobuild.sh --push (builds and pushes to GHCR)
@@ -79,13 +79,13 @@ done
 
 # Check if docker is installed
 if ! command -v docker &> /dev/null; then
-    print_error "Docker is not installed. Please install Docker to build the plugin."
+    print_error "Docker is not installed. Please install Docker to build the service."
     exit 1
 fi
 
-# Check if Dockerfile.plugin exists
-if [ ! -f "Dockerfile.plugin" ]; then
-    print_error "Dockerfile.plugin not found in current directory"
+# Check if Dockerfile exists
+if [ ! -f "Dockerfile" ]; then
+    print_error "Dockerfile not found in current directory"
     exit 1
 fi
 
@@ -157,7 +157,7 @@ BUILD_PLATFORMS="linux/amd64,linux/arm64"
 
 print_info "🐳 Docker BuildX Configuration:"
 print_table_header "Configuration" "Value" "Status"
-print_table_row "Dockerfile" "Dockerfile.plugin" "✓ Required"
+print_table_row "Dockerfile" "Dockerfile" "✓ Required"
 print_table_row "Platforms" "$BUILD_PLATFORMS" "→ Multi-arch"
 print_table_row "Local Image" "$LOCAL_IMAGE" "→ Local"
 print_table_row "Registry Image" "$REGISTRY_IMAGE" "→ GHCR"
@@ -350,7 +350,7 @@ if [ $? -eq 0 ]; then
     echo "  ├─ Authors: $IMAGE_AUTHORS"
     echo "  ├─ Platforms: $BUILD_PLATFORMS"
     echo "  ├─ Base Image: debian:bookworm-slim (Multi-stage)"
-    echo "  ├─ Runtime User: plugin (UID: 1000)"
+    echo "  ├─ Runtime User: service (UID: 1000)"
     echo "  ├─ Exposed Port: 5500"
     echo "  ├─ Health Check: Enabled (30s interval)"
     echo "  └─ Architecture: Multi-stage build with buildx"
@@ -383,7 +383,7 @@ if [ "$SKIP_TESTS" = false ]; then
         echo "  ├─ Authors: $IMAGE_AUTHORS"
         echo "  ├─ Platforms: $BUILD_PLATFORMS"
         echo "  ├─ Base Image: debian:bookworm-slim (Multi-stage)"
-        echo "  ├─ Runtime User: plugin (UID: 1000)"
+        echo "  ├─ Runtime User: service (UID: 1000)"
         echo "  ├─ Exposed Port: 5500"
         echo "  └─ Health Check: Enabled (30s interval)"
         echo ""

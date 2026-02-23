@@ -1,7 +1,0 @@
-chore: Finalize rename and add buildx auto-setup
-
-- Renamed Dockerfile.plugin to Dockerfile and updated its content for MySQL.
-- Updated autobuild.sh to auto-install docker-buildx on supported systems.
-- Corrected binary names in autobuild.sh and Dockerfile to emqx_auth_service.
-- Removed legacy Dockerfile.rocksdb.
-- Updated project metadata and terminology across all core files.
