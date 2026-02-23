@@ -1,5 +1,5 @@
-use sha2::{Sha256, Digest};
 use log::debug;
+use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 pub fn hash_password(password: &str) -> String {

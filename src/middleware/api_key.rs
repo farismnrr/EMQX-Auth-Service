@@ -1,13 +1,13 @@
-use std::env;
+use crate::dtos::response_dto::ErrorResponseDTO;
 use actix_web::{
+    Error, HttpResponse,
     body::EitherBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     http::header,
-    Error, HttpResponse,
 };
-use futures_util::future::{ok, Ready, LocalBoxFuture};
+use futures_util::future::{LocalBoxFuture, Ready, ok};
 use log::debug;
-use crate::dtos::response_dto::ErrorResponseDTO;
+use std::env;
 
 #[derive(Clone)]
 pub struct ApiKeyMiddleware;
@@ -44,7 +44,10 @@ where
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&self, ctx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &self,
+        ctx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.service.poll_ready(ctx)
     }
 
@@ -58,8 +61,13 @@ where
             .and_then(|v| v.to_str().ok())
             .map(str::trim)
             .unwrap_or("");
-        debug!("[Middleware | ApiKey] call - path='{}' auth_header_present={} auth_len={} expected_key_set={}",
-            path, has_auth_header, auth_value.len(), !expected_key.is_empty());
+        debug!(
+            "[Middleware | ApiKey] call - path='{}' auth_header_present={} auth_len={} expected_key_set={}",
+            path,
+            has_auth_header,
+            auth_value.len(),
+            !expected_key.is_empty()
+        );
 
         let is_valid = !expected_key.is_empty() && is_authorized(auth_value, &expected_key);
         if !is_valid {
@@ -75,7 +83,7 @@ where
             return Box::pin(async move { Ok(req.into_response(res.map_into_right_body())) });
         }
 
-    debug!("[Middleware | ApiKey] Authorized request to '{}'", path);
+        debug!("[Middleware | ApiKey] Authorized request to '{}'", path);
         let fut = self.service.call(req);
         Box::pin(async move {
             let res = fut.await?;
@@ -89,7 +97,8 @@ fn is_authorized(header_value: &str, expected_key: &str) -> bool {
         return true;
     }
 
-    if let Some(token) = header_value.strip_prefix("Bearer ")
+    if let Some(token) = header_value
+        .strip_prefix("Bearer ")
         .or_else(|| header_value.strip_prefix("bearer "))
     {
         return token.trim() == expected_key;
@@ -97,7 +106,9 @@ fn is_authorized(header_value: &str, expected_key: &str) -> bool {
 
     let mut parts = header_value.split_whitespace();
     match (parts.next(), parts.next()) {
-        (Some(scheme), Some(token)) => scheme.eq_ignore_ascii_case("bearer") && token.trim() == expected_key,
+        (Some(scheme), Some(token)) => {
+            scheme.eq_ignore_ascii_case("bearer") && token.trim() == expected_key
+        }
         _ => false,
     }
 }

@@ -1,8 +1,9 @@
 use actix_web::{
+    Error,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    Error, http::header,
+    http::header,
 };
-use futures_util::future::{ok, Ready, LocalBoxFuture};
+use futures_util::future::{LocalBoxFuture, Ready, ok};
 use log::debug;
 
 #[derive(Clone)]
@@ -38,7 +39,10 @@ where
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&self, ctx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &self,
+        ctx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.service.poll_ready(ctx)
     }
 
@@ -51,7 +55,10 @@ where
                 header::HeaderName::from_static("x-powered-by"),
                 header::HeaderValue::from_static("IoTNet"),
             );
-            debug!("[Middleware | PoweredBy] set 'x-powered-by' header for path='{}'", path);
+            debug!(
+                "[Middleware | PoweredBy] set 'x-powered-by' header for path='{}'",
+                path
+            );
             Ok(res)
         })
     }

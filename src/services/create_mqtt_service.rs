@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use log::debug;
+use std::sync::Arc;
 
+use crate::dtos::mqtt_dto::CreateMqttDTO;
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::dtos::mqtt_dto::CreateMqttDTO;
 use crate::utils::hash_password::hash_password;
 
 pub struct CreateMqttService {
@@ -13,20 +13,38 @@ pub struct CreateMqttService {
 }
 
 impl CreateMqttService {
-    pub fn new(repo_create: Arc<CreateMqttRepository>, repo_get: Arc<GetMqttByUsernameRepository>) -> Self {
-        Self { repo_create, repo_get }
+    pub fn new(
+        repo_create: Arc<CreateMqttRepository>,
+        repo_get: Arc<GetMqttByUsernameRepository>,
+    ) -> Self {
+        Self {
+            repo_create,
+            repo_get,
+        }
     }
 
-    pub fn create_mqtt(&self, dto: CreateMqttDTO) -> Result<bool, MqttServiceError> {
+    pub async fn create_mqtt(&self, dto: CreateMqttDTO) -> Result<bool, MqttServiceError> {
         self.create_mqtt_validation(&dto)?;
-        
-        if self.repo_get.get_by_username(&dto.username)?.is_some() {
-            return Err(MqttServiceError::Conflict("MQTT user already exists".into()));
+
+        if self
+            .repo_get
+            .get_mqtt_by_username(&dto.username)
+            .await
+            .is_ok()
+        {
+            return Err(MqttServiceError::Conflict(
+                "MQTT user already exists".into(),
+            ));
         }
 
         let hashed = hash_password(&dto.password);
-        self.repo_create.create_mqtt(&dto.username, &hashed, dto.is_superuser)?;
-        debug!("[Service | CreateMQTT] User MQTT created successfully: {}", &dto.username);
+        self.repo_create
+            .create_mqtt(&dto.username, &hashed, dto.is_superuser)
+            .await?;
+        debug!(
+            "[Service | CreateMQTT] User MQTT created successfully: {}",
+            &dto.username
+        );
         Ok(true)
     }
 

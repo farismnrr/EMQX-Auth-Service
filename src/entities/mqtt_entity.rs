@@ -1,20 +1,21 @@
-use bincode::{Encode, Decode};
+use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode)]
-pub struct MqttEntity {
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
+#[sea_orm(table_name = "mqtt_users")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i32,
+    #[sea_orm(unique)]
     pub username: String,
     pub password: String,
     pub is_deleted: bool,
     pub is_superuser: bool,
 }
 
-impl MqttEntity {
-    pub fn create(username: impl Into<String>, password: impl Into<String>, is_superuser: impl Into<bool>) -> Self {
-        MqttEntity {
-            username: username.into(),
-            password: password.into(),
-            is_deleted: false,
-            is_superuser: is_superuser.into(),
-        }
-    }
-}
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+
+// End of file

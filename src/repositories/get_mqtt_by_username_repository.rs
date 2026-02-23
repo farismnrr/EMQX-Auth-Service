@@ -1,62 +1,48 @@
-use rocksdb::{DB, ReadOptions};
-use std::sync::Arc;
-use bincode::config::standard;
-use bincode::decode_from_slice;
-use log::{debug, error};
-use crate::entities::mqtt_entity::MqttEntity;
+use crate::entities::mqtt_entity::{Column, Entity as MqttUser, Model as MqttEntity};
 use crate::repositories::repository_error::MqttRepositoryError;
+use log::{debug, error};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 pub struct GetMqttByUsernameRepository {
-    db: Arc<DB>,
+    db: DatabaseConnection,
 }
 
 impl GetMqttByUsernameRepository {
-    pub fn new(db: Arc<DB>) -> Self {
+    pub fn new(db: DatabaseConnection) -> Self {
         GetMqttByUsernameRepository { db }
     }
 
-    pub fn get_by_username(&self, username: &str) -> Result<Option<MqttEntity>, MqttRepositoryError> {
-        // Build RocksDB key
-        let key: String = format!("mqtt:{}", username);
+    pub async fn get_mqtt_by_username(
+        &self,
+        username: &str,
+    ) -> Result<MqttEntity, MqttRepositoryError> {
+        debug!(
+            "[Repository | GetByUsername] Fetching user MQTT for username: {}",
+            username
+        );
 
-        // Configure read options for optimization
-        let mut read_opts = ReadOptions::default();
-        read_opts.set_verify_checksums(false);
-        read_opts.fill_cache(true);
+        let user = MqttUser::find()
+            .filter(Column::Username.eq(username))
+            .filter(Column::IsDeleted.eq(false))
+            .one(&self.db)
+            .await
+            .map_err(MqttRepositoryError::SeaOrm)?;
 
-        // Try to fetch record from DB
-        debug!("[Repository | CheckMQTTActive] Attempting to fetch user MQTT '{}' from database.", username);
-        let value = match self.db.get_opt(key.as_bytes(), &read_opts) {
-            Ok(v) => {
-                if v.is_some() {
-                    debug!("[Repository | CheckMQTTActive] Database read returned a value for user MQTT '{}'.", username);
-                } else {
-                    debug!("[Repository | CheckMQTTActive] Database read returned no value for user MQTT '{}'.", username);
-                }
-                v
+        match user {
+            Some(m) => {
+                debug!(
+                    "[Repository | GetByUsername] Successfully fetched user MQTT for username: {}",
+                    username
+                );
+                Ok(m)
             }
-            Err(e) => {
-                error!("[Repository | CheckMQTTActive] Database read error for user MQTT {username}: {e}");
-                debug!("[Repository | CheckMQTTActive] Database read error for user MQTT '{}': {:#?}", username, e);
-                return Err(MqttRepositoryError::Database(e));
+            None => {
+                error!(
+                    "[Repository | GetByUsername] User MQTT {} not found in MySQL",
+                    username
+                );
+                Err(MqttRepositoryError::NotFound)
             }
-        };
-
-        let Some(value) = value else {
-            debug!("[Repository | CheckMQTTActive] User MQTT '{}' not found in database.", username);
-            return Ok(None);
-        };
-
-        debug!("[Repository | CheckMQTTActive] Decoding user MQTT data for '{}'.", username);
-        let (mqtt, _) = match decode_from_slice::<MqttEntity, _>(&value, standard()) {
-            Ok(decoded) => decoded,
-            Err(e) => {
-                error!("[Repository | CheckMQTTActive] Failed to decode user MQTT data for {username}: {e}");
-                debug!("[Repository | CheckMQTTActive] Decode error for user MQTT '{}': {:#?}", username, e);
-                return Err(MqttRepositoryError::Decode(e));
-            }
-        };
-
-        Ok(Some(mqtt))
+        }
     }
 }

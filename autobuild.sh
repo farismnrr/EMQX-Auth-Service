@@ -201,16 +201,21 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     fi
     
     # Validate required variables
-    if [ -z "$GITHUB_PAT_TOKEN" ]; then
-        print_error "GITHUB_PAT_TOKEN not found in .env!"
-        echo ""
-        echo -e "${YELLOW}Setup required:${NC}"
-        echo "1. Create .env file"
-        echo "2. Add: GITHUB_PAT_TOKEN=ghp_xxxxxx"
-        echo "3. See .env.example for more options"
-        exit 1
+    LOGIN_TOKEN="$GITHUB_PAT_TOKEN"
+    if [ -z "$LOGIN_TOKEN" ]; then
+        if command -v gh &> /dev/null && gh auth status &> /dev/null; then
+            print_info "GITHUB_PAT_TOKEN not found, but gh CLI is authenticated. Using gh auth token."
+            LOGIN_TOKEN=$(gh auth token)
+        else
+            print_error "GITHUB_PAT_TOKEN not found in .env and gh CLI is not authenticated!"
+            echo ""
+            echo -e "${YELLOW}Setup required:${NC}"
+            echo "1. Create .env file and add GITHUB_PAT_TOKEN=ghp_xxxxxx"
+            echo "2. Or login via GitHub CLI: gh auth login"
+            exit 1
+        fi
     fi
-    print_success "✓ GITHUB_PAT_TOKEN found"
+    print_success "✓ Authentication token ready"
     
     # Defaults if not in .env
     GHCR_USERNAME="${GHCR_USERNAME:-farismnrr}"
@@ -226,7 +231,7 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     
     # Authenticate
     print_info "Logging in to GHCR..."
-    if echo "$GITHUB_PAT_TOKEN" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin &> /dev/null; then
+    if echo "$LOGIN_TOKEN" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin &> /dev/null; then
         print_success "✓ Successfully authenticated to GHCR"
     else
         print_error "Failed to authenticate to GHCR"
