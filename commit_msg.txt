@@ -1,5 +1,5 @@
-fix: Correct Dockerfile reference and final terminology in autobuild.sh
+fix: Force GHCR namespace to farismnrr and use arrays for flags
 
-- Fixed hardcoded Dockerfile.plugin check.
-- Updated remaining 'plugin' references to 'service' in comments and metadata.
-- Standardized runtime user info in build output.
+- Hardcoded GHCR_NAMESPACE=farismnrr in autobuild.sh to prevent env overrides.
+- Refactored BUILD_FLAGS string to BUILD_ARGS array to handle labels/annotations safely.
+- Removed risky 'eval' call, fixing the strange linker errors caused by quote stripping.
