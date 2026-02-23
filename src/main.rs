@@ -1,12 +1,12 @@
-mod server;
-mod handler;
-mod middleware;
-mod infrastructure;
-mod repositories;
-mod services;
-mod entities;
-mod utils;
 mod dtos;
+mod entities;
+mod handler;
+mod infrastructure;
+mod middleware;
+mod repositories;
+mod server;
+mod services;
+mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

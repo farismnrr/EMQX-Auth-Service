@@ -1,0 +1,17 @@
+feat: Migrate primary data storage from RocksDB to MySQL with Sea-ORM
+
+This commit represents a major architectural shift from RocksDB to a relational MySQL database managed by Sea-ORM.
+
+Key Changes:
+- Integrated Sea-ORM and sea-orm-migration into the project workspace.
+- Implemented a new 'migration' package for database schema versioning.
+- Refactored all repositories from synchronous RocksDB to asynchronous Sea-ORM queries.
+- Updated MqttEntity with Sea-ORM macros and removed bincode dependencies.
+- Migrated server initialization to establish Sea-ORM connection and run migrations.
+- Completely removed legacy RocksDB infrastructure and associated storage logic.
+- Purged unused dependencies including rocksdb and bincode.
+- Standardized error handling and refactored API handlers/services to be fully async.
+- Optimized code quality by resolving clippy lints and running cargo fmt.
+- Updated .env configuration to remove deprecated variables.
+
+This change streamlines the architecture and improves development speed.

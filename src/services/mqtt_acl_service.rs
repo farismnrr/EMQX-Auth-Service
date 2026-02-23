@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use log::debug;
+use crate::dtos::mqtt_dto::MqttAclDTO;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::dtos::mqtt_dto::MqttAclDTO;
+use log::debug;
+use std::sync::Arc;
 
 pub struct MqttAclService {
     repo: Arc<GetMqttByUsernameRepository>,
@@ -13,20 +13,28 @@ impl MqttAclService {
         Self { repo }
     }
 
-    pub fn check_acl_permission(&self, dto: MqttAclDTO) -> Result<bool, MqttServiceError> {
+    pub async fn check_acl_permission(&self, dto: MqttAclDTO) -> Result<bool, MqttServiceError> {
         self.mqtt_input_acl_validation(&dto)?;
 
-        let mqtt = match self.repo.get_by_username(&dto.username)? {
-            Some(u) => u,
-            None => {
-                debug!("[Service | CheckMQTTACL] User MQTT not found: {}", dto.username);
+        let mqtt = match self.repo.get_mqtt_by_username(&dto.username).await {
+            Ok(u) => u,
+            Err(_) => {
+                debug!(
+                    "[Service | CheckMQTTACL] User MQTT not found: {}",
+                    dto.username
+                );
                 return Err(MqttServiceError::MqttNotFound("User MQTT not found".into()));
             }
         };
 
         if mqtt.is_deleted {
-            debug!("[Service | CheckMQTTACL] User MQTT is deleted or inactive: {}", dto.username);
-            return Err(MqttServiceError::MqttNotActive("User MQTT is not active or deleted".into()));
+            debug!(
+                "[Service | CheckMQTTACL] User MQTT is deleted or inactive: {}",
+                dto.username
+            );
+            return Err(MqttServiceError::MqttNotActive(
+                "User MQTT is not active or deleted".into(),
+            ));
         }
 
         if mqtt.is_superuser {
@@ -39,9 +47,9 @@ impl MqttAclService {
 
         if !dto.topic.starts_with(&dto.username) {
             debug!(
-            "[Service | CheckMQTTACL] Topic `{}` does not start with username `{}` → access denied",
-            dto.topic, dto.username
-        );
+                "[Service | CheckMQTTACL] Topic `{}` does not start with username `{}` → access denied",
+                dto.topic, dto.username
+            );
             return Ok(false);
         }
 

@@ -1,6 +1,6 @@
-use thiserror::Error;
-use serde::Serialize;
 use crate::repositories::repository_error::MqttRepositoryError;
+use serde::Serialize;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ValidationError {

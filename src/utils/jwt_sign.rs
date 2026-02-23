@@ -1,6 +1,6 @@
-use jsonwebtoken::{encode, Header, EncodingKey, errors::Error as JwtError};
-use chrono::{Utc, Duration};
 use crate::dtos::jwt_dto::Claims;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{EncodingKey, Header, encode, errors::Error as JwtError};
 
 pub fn create_jwt(username: &str, secret: &str) -> Result<String, JwtError> {
     let now = Utc::now();
@@ -11,5 +11,9 @@ pub fn create_jwt(username: &str, secret: &str) -> Result<String, JwtError> {
         sub: "IoTNet".parse().unwrap(),
     };
 
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_ref()))
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_ref()),
+    )
 }
