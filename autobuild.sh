@@ -118,14 +118,14 @@ else
     if cargo build --release 2>&1; then
         print_success "✓ Local Rust build completed successfully"
         
-        if [ -f "target/release/emqx_auth_plugin" ]; then
-            BINARY_SIZE=$(du -h target/release/emqx_auth_plugin | cut -f1)
-            BINARY_PATH="$(pwd)/target/release/emqx_auth_plugin"
+        if [ -f "target/release/emqx_auth_service" ]; then
+            BINARY_SIZE=$(du -h target/release/emqx_auth_service | cut -f1)
+            BINARY_PATH="$(pwd)/target/release/emqx_auth_service"
             
             echo ""
             print_info "📊 Build Artifact Information:"
             print_table_header "Property" "Value" "Type"
-            print_table_row "Binary Name" "emqx_auth_plugin" "Executable"
+            print_table_row "Binary Name" "emqx_auth_service" "Executable"
             print_table_row "Binary Size" "$BINARY_SIZE" "Release Build"
             print_table_row "Location" "$BINARY_PATH" "Path"
             echo ""
@@ -186,7 +186,7 @@ BUILD_FLAGS="$BUILD_FLAGS --label org.opencontainers.image.version=\"$IMAGE_VERS
 BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.title=\"$IMAGE_TITLE\""
 BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.description=\"$IMAGE_DESCRIPTION\""
 BUILD_FLAGS="$BUILD_FLAGS --annotation org.opencontainers.image.source=\"$IMAGE_SOURCE\""
-BUILD_FLAGS="$BUILD_FLAGS -f Dockerfile.plugin"
+BUILD_FLAGS="$BUILD_FLAGS -f Dockerfile"
 BUILD_FLAGS="$BUILD_FLAGS --progress=plain"
 
 if [ "$PUSH_TO_REGISTRY" = true ]; then
@@ -277,11 +277,38 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     
     # Check buildx
     if ! docker buildx version &> /dev/null; then
-        print_error "Docker buildx is not available!"
-        echo ""
-        print_warning "To enable buildx:"
-        echo "  docker buildx create --use"
-        exit 1
+        print_warning "Docker buildx is not available. Attempting to install..."
+        
+        # Detect OS
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            case $ID in
+                arch|cachyos|manjaro)
+                    print_info "Arch-based system detected. Installing docker-buildx via pacman..."
+                    sudo pacman -S --noconfirm docker-buildx
+                    ;;
+                ubuntu|debian|linuxmint)
+                    print_info "Debian-based system detected. Installing docker-buildx-plugin via apt..."
+                    sudo apt-get update && sudo apt-get install -y docker-buildx-plugin
+                    ;;
+                fedora|rhel|centos)
+                    print_info "RHEL-based system detected. Installing docker-buildx via dnf..."
+                    sudo dnf install -y docker-buildx
+                    ;;
+                *)
+                    print_error "Unsupported OS ($ID) for auto-installation."
+                    print_warning "Please install the Docker Buildx plugin manually."
+                    exit 1
+                    ;;
+            esac
+        fi
+
+        # Re-check after installation
+        if ! docker buildx version &> /dev/null; then
+            print_error "Failed to install Docker buildx automatically."
+            exit 1
+        fi
+        print_success "✓ Docker buildx installed successfully"
     fi
     
     # Create or use existing buildx builder
