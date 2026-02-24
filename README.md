@@ -8,7 +8,7 @@ A high-performance authentication and authorization service for MQTT clients in 
 - Client authentication with fast password hashing
 - JWT token generation for authenticated sessions
 - Access Control List (ACL) validation
-- RocksDB persistence for high-performance data storage
+- MySQL persistence for fast authentication and ACL checks
 - RESTful API with API key validation
 - Structured error handling and logging
 
@@ -217,12 +217,16 @@ Response: 200 OK
 
 ## Environment Variables
 
-| Variable     | Description                        | Required |
-| ------------ | ---------------------------------- | -------- |
-| `DB_PATH`    | RocksDB data directory path        | Yes      |
-| `SECRET_KEY` | SHA256 hash for JWT signing        | Yes      |
-| `API_KEY`    | API key for request authentication | Yes      |
-| `LOG_LEVEL`  | Logging level (info, debug, warn)  | No       |
+| Variable         | Description                        | Required |
+| ---------------- | ---------------------------------- | -------- |
+| `MYSQL_HOST`     | MySQL server host                  | Yes      |
+| `MYSQL_PORT`     | MySQL server port                  | Yes      |
+| `MYSQL_DATABASE` | MySQL database name                | Yes      |
+| `MYSQL_USER`     | MySQL username                     | Yes      |
+| `MYSQL_PASSWORD` | MySQL password                     | Yes      |
+| `SECRET_KEY`     | SHA256 hash for JWT signing        | Yes      |
+| `API_KEY`        | API key for request authentication | Yes      |
+| `LOG_LEVEL`      | Logging level (info, debug, warn)  | No       |
 
 ## Make Commands
 

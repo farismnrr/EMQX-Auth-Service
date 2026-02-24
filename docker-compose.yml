@@ -1,17 +1,43 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: emqx-auth-mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-emqx_auth}
+      MYSQL_USER: ${MYSQL_USER:-db_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-db_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   emqx-auth-service:
     image: ghcr.io/farismnrr/emqx-auth-service:latest
     container_name: emqx-auth-service
+    pull_policy: always
+    restart: unless-stopped
     ports:
       - "5500:5500"
     environment:
-      DB_PATH: ${DB_PATH:-/data}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       SECRET_KEY: ${SECRET_KEY}
       API_KEY: ${API_KEY}
-      LOG_LEVEL: ${LOG_LEVEL:-info} # Possible values: debug, info, warning, error
-    volumes:
-      - rocksdb_data:/data
-    restart: unless-stopped
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-db_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-db_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-emqx_auth}
+    depends_on:
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5500/"]
       interval: 30s
@@ -20,4 +46,4 @@ services:
       start_period: 40s
 
 volumes:
-  rocksdb_data:
+  mysql_data:
