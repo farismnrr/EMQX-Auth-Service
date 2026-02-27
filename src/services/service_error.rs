@@ -30,4 +30,7 @@ pub enum MqttServiceError {
 
     #[error("JWT error: {0}")]
     JwtError(String),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }

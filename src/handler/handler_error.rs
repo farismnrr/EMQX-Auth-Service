@@ -58,6 +58,7 @@ impl AppError for MqttServiceError {
             Self::MqttNotActive(_) => StatusCode::FORBIDDEN,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::JwtError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

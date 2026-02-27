@@ -10,6 +10,9 @@ use crate::middleware::logger_request::RequestLoggerMiddleware;
 use crate::middleware::powered_by::PoweredByMiddleware;
 
 use crate::handler::create_mqtt_handler::{AppState as CreateMqttAppState, create_mqtt_handler};
+use crate::handler::get_mqtt_credentials_handler::{
+    AppState as GetCredentialsAppState, get_mqtt_credentials_handler,
+};
 use crate::handler::get_mqtt_list_handler::{AppState as GetListAppState, get_mqtt_list_handler};
 use crate::handler::mqtt_acl_handler::{AppState as MqttAclAppState, mqtt_acl_handler};
 use crate::handler::mqtt_login_handler::{
@@ -20,6 +23,7 @@ use crate::handler::soft_delete_mqtt_handler::{
 };
 
 use crate::services::create_mqtt_service::CreateMqttService;
+use crate::services::get_mqtt_credentials_service::GetMqttCredentialsService;
 use crate::services::get_mqtt_list_service::GetMqttListService;
 use crate::services::mqtt_acl_service::MqttAclService;
 use crate::services::mqtt_login_service::MqttLoginService;
@@ -108,6 +112,9 @@ pub async fn run_server() -> std::io::Result<()> {
         Arc::clone(&create_mqtt_repo),
         Arc::clone(&get_by_username_repo),
     ));
+    let get_mqtt_credentials_service = Arc::new(GetMqttCredentialsService::new(
+        Arc::clone(&get_by_username_repo),
+    ));
     let get_mqtt_list_service = Arc::new(GetMqttListService::new(Arc::clone(&get_mqtt_list_repo)));
     let mqtt_login_service = Arc::new(MqttLoginService::new(
         Arc::clone(&get_by_username_repo),
@@ -128,6 +135,9 @@ pub async fn run_server() -> std::io::Result<()> {
     let get_mqtt_list_state = web::Data::new(GetListAppState {
         get_mqtt_list_service,
     });
+    let get_mqtt_credentials_state = web::Data::new(GetCredentialsAppState {
+        get_mqtt_credentials_service,
+    });
     let mqtt_login_state = web::Data::new(MqttLoginAppState { mqtt_login_service });
     let mqtt_acl_state = web::Data::new(MqttAclAppState { mqtt_acl_service });
     let soft_delete_mqtt_state = web::Data::new(SoftDeleteMqttAppState {
@@ -142,6 +152,7 @@ pub async fn run_server() -> std::io::Result<()> {
     let server = HttpServer::new(move || {
         App::new()
             .app_data(create_mqtt_state.clone())
+            .app_data(get_mqtt_credentials_state.clone())
             .app_data(get_mqtt_list_state.clone())
             .app_data(mqtt_login_state.clone())
             .app_data(mqtt_acl_state.clone())
@@ -158,6 +169,7 @@ pub async fn run_server() -> std::io::Result<()> {
                     .wrap(ApiKeyMiddleware)
                     .route("/create", web::post().to(create_mqtt_handler))
                     .route("/check", web::post().to(login_with_credentials_handler))
+                    .route("/credentials/{username}", web::get().to(get_mqtt_credentials_handler))
                     .route("/acl", web::post().to(mqtt_acl_handler))
                     .route("/{username}", web::delete().to(soft_delete_mqtt))
                     // Development only

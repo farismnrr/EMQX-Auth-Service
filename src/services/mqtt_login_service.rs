@@ -1,7 +1,7 @@
 use crate::dtos::mqtt_dto::{AuthType, MqttLoginDTO};
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::utils::hash_password::verify_password;
+use crate::utils::encryption::decrypt_password;
 use crate::utils::jwt_sign::create_jwt;
 use log::debug;
 use std::sync::Arc;
@@ -45,7 +45,10 @@ impl MqttLoginService {
 
         match dto.method.unwrap() {
             AuthType::Credentials => {
-                let is_valid = verify_password(&dto.password, &mqtt.password);
+                let decrypted_stored = decrypt_password(&mqtt.password)
+                    .map_err(|e| MqttServiceError::InternalError(e))?;
+                
+                let is_valid = dto.password == decrypted_stored;
                 if !is_valid {
                     debug!(
                         "[Service | CheckMQTTActive] Invalid credentials for user MQTT: {}",
