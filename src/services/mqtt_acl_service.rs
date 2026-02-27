@@ -45,10 +45,11 @@ impl MqttAclService {
             return Ok(true);
         }
 
-        if !dto.topic.starts_with(&dto.username) {
+        let expected_prefix = format!("users/{}/", dto.username);
+        if !dto.topic.starts_with(&expected_prefix) {
             debug!(
-                "[Service | CheckMQTTACL] Topic `{}` does not start with username `{}` → access denied",
-                dto.topic, dto.username
+                "[Service | CheckMQTTACL] Topic `{}` does not start with expected prefix `{}` → access denied",
+                dto.topic, expected_prefix
             );
             return Ok(false);
         }

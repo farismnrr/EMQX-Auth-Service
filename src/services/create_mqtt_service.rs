@@ -5,7 +5,7 @@ use crate::dtos::mqtt_dto::CreateMqttDTO;
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::utils::hash_password::hash_password;
+use crate::utils::encryption::encrypt_password;
 
 pub struct CreateMqttService {
     repo_create: Arc<CreateMqttRepository>,
@@ -37,9 +37,9 @@ impl CreateMqttService {
             ));
         }
 
-        let hashed = hash_password(&dto.password);
+        let encrypted = encrypt_password(&dto.password).map_err(|e| MqttServiceError::InternalError(e))?;
         self.repo_create
-            .create_mqtt(&dto.username, &hashed, dto.is_superuser)
+            .create_mqtt(&dto.username, &encrypted, dto.is_superuser)
             .await?;
         debug!(
             "[Service | CreateMQTT] User MQTT created successfully: {}",

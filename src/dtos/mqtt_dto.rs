@@ -49,3 +49,9 @@ pub struct MqttAclDTO {
 pub struct DeleteMqttDTO {
     pub username: String,
 }
+
+#[derive(Serialize)]
+pub struct MqttCredentialsDTO {
+    pub username: String,
+    pub password: String,
+}
