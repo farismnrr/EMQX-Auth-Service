@@ -3,7 +3,7 @@
 COMPOSE := docker compose
 COMPOSE_FILE := docker-compose.yml
 
-.PHONY: help docker docker\ run docker\ stop docker\ ps build push key dev clean start-mysql-dev stop-mysql-dev kill
+.PHONY: help docker docker\ run docker\ stop docker\ ps build push key dev clean start-mysql-dev stop-mysql-dev kill mqtt-create mqtt-delete mqtt-create-superuser
 .DEFAULT_GOAL := help
 
 help:
@@ -24,6 +24,11 @@ help:
 	@echo "  --- DATABASE ---"
 	@echo "  make start-mysql-dev      - Start dev MySQL container"
 	@echo "  make stop-mysql-dev       - Stop dev MySQL container"
+	@echo ""
+	@echo "  --- MQTT USER MANAGEMENT ---"
+	@echo "  make mqtt-create          - Create a regular MQTT user (auto SHA-512 password)"
+	@echo "  make mqtt-delete          - Delete an MQTT user"
+	@echo "  make mqtt-create-superuser - Create a superuser MQTT user (auto SHA-512 password)"
 	@echo ""
 
 # Docker management
@@ -105,3 +110,67 @@ clean:
 	@docker rmi emqx-auth-service:latest 2>/dev/null || true
 	@echo "✓ Clean complete"
 
+# MQTT User Management
+# Reads EMQX API base URL from .env (EMQX_API_URL), falls back to localhost:18083
+EMQX_API_URL ?= $(shell grep -E '^EMQX_API_URL=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+EMQX_API_URL := $(if $(EMQX_API_URL),$(EMQX_API_URL),http://localhost:18083)
+
+# Create a regular MQTT user with auto-generated SHA-512 password
+mqtt-create:
+	@read -p "Enter MQTT username: " username; \
+	password=$$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32); \
+	hashed=$$(echo -n "$$password" | openssl dgst -sha512 | awk '{print $$2}'); \
+	echo ""; \
+	echo "📋 Username : $$username"; \
+	echo "🔑 Password : $$password"; \
+	echo "🔐 SHA-512  : $$hashed"; \
+	echo ""; \
+	response=$$(curl -s -o /tmp/mqtt_resp.json -w "%{http_code}" \
+		-X POST "$(EMQX_API_URL)/api/v5/authentication/password_based:built_in_database/users" \
+		-H "Content-Type: application/json" \
+		-u "admin:public" \
+		-d "{\"user_id\":\"$$username\",\"password\":\"$$password\",\"is_superuser\":false}"); \
+	if [ "$$response" = "201" ]; then \
+		echo "✅ MQTT user '$$username' created successfully!"; \
+	else \
+		echo "❌ Failed to create user (HTTP $$response):"; \
+		cat /tmp/mqtt_resp.json; echo; \
+	fi
+
+# Delete an MQTT user
+mqtt-delete:
+	@read -p "Enter MQTT username to delete: " username; \
+	echo ""; \
+	response=$$(curl -s -o /tmp/mqtt_resp.json -w "%{http_code}" \
+		-X DELETE "$(EMQX_API_URL)/api/v5/authentication/password_based:built_in_database/users/$$username" \
+		-H "Content-Type: application/json" \
+		-u "admin:public"); \
+	if [ "$$response" = "204" ]; then \
+		echo "✅ MQTT user '$$username' deleted successfully!"; \
+	else \
+		echo "❌ Failed to delete user (HTTP $$response):"; \
+		cat /tmp/mqtt_resp.json; echo; \
+	fi
+
+# Create a superuser MQTT user with auto-generated SHA-512 password
+mqtt-create-superuser:
+	@read -p "Enter MQTT superuser username: " username; \
+	password=$$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32); \
+	hashed=$$(echo -n "$$password" | openssl dgst -sha512 | awk '{print $$2}'); \
+	echo ""; \
+	echo "📋 Username : $$username"; \
+	echo "🔑 Password : $$password"; \
+	echo "🔐 SHA-512  : $$hashed"; \
+	echo "👑 Role     : superuser"; \
+	echo ""; \
+	response=$$(curl -s -o /tmp/mqtt_resp.json -w "%{http_code}" \
+		-X POST "$(EMQX_API_URL)/api/v5/authentication/password_based:built_in_database/users" \
+		-H "Content-Type: application/json" \
+		-u "admin:public" \
+		-d "{\"user_id\":\"$$username\",\"password\":\"$$password\",\"is_superuser\":true}"); \
+	if [ "$$response" = "201" ]; then \
+		echo "✅ MQTT superuser '$$username' created successfully!"; \
+	else \
+		echo "❌ Failed to create superuser (HTTP $$response):"; \
+		cat /tmp/mqtt_resp.json; echo; \
+	fi
