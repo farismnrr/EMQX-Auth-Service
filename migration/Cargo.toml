@@ -11,4 +11,5 @@ path = "src/lib.rs"
 sea-orm-migration = { version = "1.1.0", features = [
     "runtime-tokio-rustls",
     "sqlx-mysql",
+    "sqlx-postgres",
 ] }
