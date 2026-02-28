@@ -4,7 +4,7 @@ use log::{error, info};
 use std::io::Write;
 use std::sync::Arc;
 
-use crate::infrastructure::mysql::{close_mysql, init_mysql};
+use crate::infrastructure::database::{DbType, close_db, init_db};
 use crate::middleware::api_key::ApiKeyMiddleware;
 use crate::middleware::logger_request::RequestLoggerMiddleware;
 use crate::middleware::powered_by::PoweredByMiddleware;
@@ -49,14 +49,21 @@ pub async fn run_server() -> std::io::Result<()> {
     let secret_key =
         std::env::var("SECRET_KEY").expect("❌ Environment variable SECRET_KEY is not set");
 
-    let mysql_host = std::env::var("MYSQL_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let mysql_port = std::env::var("MYSQL_PORT")
-        .unwrap_or_else(|_| "3306".to_string())
+    let db_type_str = std::env::var("DB_TYPE").unwrap_or_else(|_| "mysql".to_string());
+    let db_type = DbType::from_str(&db_type_str);
+
+    let db_host = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_HOST" } else { "MYSQL_HOST" })
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let db_port = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_PORT" } else { "MYSQL_PORT" })
+        .unwrap_or_else(|_| if matches!(db_type, DbType::Postgres) { "5432" } else { "3306" }.to_string())
         .parse::<u16>()
-        .unwrap_or(3306);
-    let mysql_user = std::env::var("MYSQL_USER").expect("❌ MYSQL_USER is not set");
-    let mysql_pass = std::env::var("MYSQL_PASSWORD").expect("❌ MYSQL_PASSWORD is not set");
-    let mysql_db = std::env::var("MYSQL_DATABASE").expect("❌ MYSQL_DATABASE is not set");
+        .unwrap_or(if matches!(db_type, DbType::Postgres) { 5432 } else { 3306 });
+    let db_user = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_USER" } else { "MYSQL_USER" })
+        .expect("❌ Database user is not set");
+    let db_pass = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_PASSWORD" } else { "MYSQL_PASSWORD" })
+        .expect("❌ Database password is not set");
+    let db_name = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_DATABASE" } else { "MYSQL_DATABASE" })
+        .expect("❌ Database name is not set");
 
     // =====================
     // 🪵 Initialize logger with custom format + color
@@ -88,22 +95,22 @@ pub async fn run_server() -> std::io::Result<()> {
     info!("🟢 Logging initialized successfully");
 
     // =====================
-    // 🐬 MySQL Initialization (Sea-ORM)
+    // 🗄️ Database Initialization (Sea-ORM)
     // =====================
-    let mysql_conn = init_mysql(&mysql_host, mysql_port, &mysql_user, &mysql_pass, &mysql_db)
+    let db_conn = init_db(db_type, &db_host, db_port, &db_user, &db_pass, &db_name)
         .await
         .map_err(|e| {
-            error!("❌ Failed to initialize MySQL via Sea-ORM: {}", e);
-            std::io::Error::other("Failed to initialize MySQL")
+            error!("❌ Failed to initialize database via Sea-ORM: {}", e);
+            std::io::Error::other("Failed to initialize database")
         })?;
 
     // =====================
     // 🧩 Repository Layer
     // =====================
-    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(mysql_conn.clone()));
-    let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(mysql_conn.clone()));
-    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(mysql_conn.clone()));
-    let soft_delete_mqtt_repo = Arc::new(SoftDeleteMqttRepository::new(mysql_conn.clone()));
+    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(db_conn.clone()));
+    let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(db_conn.clone()));
+    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(db_conn.clone()));
+    let soft_delete_mqtt_repo = Arc::new(SoftDeleteMqttRepository::new(db_conn.clone()));
 
     // =====================
     // 🛠️ Service Layer
@@ -143,7 +150,7 @@ pub async fn run_server() -> std::io::Result<()> {
     let soft_delete_mqtt_state = web::Data::new(SoftDeleteMqttAppState {
         soft_delete_mqtt_service,
     });
-    let mysql_data = web::Data::new(mysql_conn.clone());
+    let mysql_data = web::Data::new(db_conn.clone());
 
     // =====================
     // 🌐 Start Server
@@ -200,8 +207,8 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     info!("Shutting down server...");
 
-    info!("Closing MySQL connection...");
-    close_mysql(mysql_conn).await;
+    info!("Closing database connection...");
+    close_db(db_conn).await;
 
     server_result
 }
