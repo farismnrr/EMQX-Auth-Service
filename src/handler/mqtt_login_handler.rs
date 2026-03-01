@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, Responder, web};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::{MqttJwtDTO, MqttLoginDTO};
-use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::response_dto::{ErrorResponseValidation, ResponseDTO};
 use crate::handler::handler_error::AppError;
 use crate::services::mqtt_login_service::MqttLoginService;
 use crate::services::service_error::MqttServiceError;
@@ -11,6 +11,22 @@ pub struct AppState {
     pub mqtt_login_service: Arc<MqttLoginService>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/mqtt/check",
+    tag = "MQTT",
+    request_body = MqttLoginDTO,
+    responses(
+        (status = 200, description = "User MQTT checked"),
+        (status = 400, description = "Validation Error", body = ErrorResponseValidation)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+/// Check MQTT Login
+///
+/// Validates an MQTT user's login credentials. Returns an access token if successful.
 pub async fn login_with_credentials_handler(
     data: web::Data<AppState>,
     body: web::Json<MqttLoginDTO>,

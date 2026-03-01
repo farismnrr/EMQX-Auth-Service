@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, Responder, web};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::MqttAclDTO;
-use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::response_dto::{ErrorResponseValidation, ResponseDTO};
 use crate::handler::handler_error::AppError;
 use crate::services::mqtt_acl_service::MqttAclService;
 use crate::services::service_error::MqttServiceError;
@@ -11,6 +11,22 @@ pub struct AppState {
     pub mqtt_acl_service: Arc<MqttAclService>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/mqtt/acl",
+    tag = "MQTT",
+    request_body = MqttAclDTO,
+    responses(
+        (status = 200, description = "ACL permission checked"),
+        (status = 400, description = "Validation Error", body = ErrorResponseValidation)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+/// Check MQTT ACL Authorization
+///
+/// Verifies whether the specified MQTT user has permissions to access the given topic.
 pub async fn mqtt_acl_handler(
     data: web::Data<AppState>,
     body: web::Json<MqttAclDTO>,

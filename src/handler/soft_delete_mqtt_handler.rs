@@ -1,5 +1,5 @@
 use crate::dtos::mqtt_dto::DeleteMqttDTO;
-use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::response_dto::{ErrorResponseValidation, ResponseDTO};
 use crate::handler::handler_error::AppError;
 use crate::services::service_error::MqttServiceError;
 use crate::services::soft_delete_mqtt_service::SoftDeleteMqttService;
@@ -10,6 +10,24 @@ pub struct AppState {
     pub soft_delete_mqtt_service: Arc<SoftDeleteMqttService>,
 }
 
+#[utoipa::path(
+    delete,
+    path = "/mqtt/{username}",
+    tag = "MQTT",
+    params(
+        ("username" = String, Path, description = "Username of the client to soft delete")
+    ),
+    responses(
+        (status = 200, description = "User mqtt deleted successfully"),
+        (status = 400, description = "Validation Error", body = ErrorResponseValidation)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+/// Delete MQTT User
+///
+/// Soft-deletes an existing MQTT user by their username.
 pub async fn soft_delete_mqtt(
     data: web::Data<AppState>,
     params: web::Path<DeleteMqttDTO>,
