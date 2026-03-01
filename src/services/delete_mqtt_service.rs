@@ -1,26 +1,26 @@
+use crate::repositories::delete_mqtt_repository::DeleteMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
-use crate::repositories::soft_delete_mqtt_repository::SoftDeleteMqttRepository;
 use crate::services::service_error::{MqttServiceError, ValidationError};
 use log::debug;
 use std::sync::Arc;
 
-pub struct SoftDeleteMqttService {
+pub struct DeleteMqttService {
     repo_get: Arc<GetMqttByUsernameRepository>,
-    repo_delete: Arc<SoftDeleteMqttRepository>,
+    repo_delete: Arc<DeleteMqttRepository>,
 }
 
-impl SoftDeleteMqttService {
+impl DeleteMqttService {
     pub fn new(
         repo_get: Arc<GetMqttByUsernameRepository>,
-        repo_delete: Arc<SoftDeleteMqttRepository>,
-    ) -> SoftDeleteMqttService {
+        repo_delete: Arc<DeleteMqttRepository>,
+    ) -> DeleteMqttService {
         Self {
             repo_get,
             repo_delete,
         }
     }
 
-    pub async fn soft_delete_mqtt(&self, username: &str) -> Result<bool, MqttServiceError> {
+    pub async fn delete_mqtt(&self, username: &str) -> Result<bool, MqttServiceError> {
         self.validate_username(username)?;
 
         // Check if user exists first
@@ -28,16 +28,16 @@ impl SoftDeleteMqttService {
             Ok(u) => u,
             Err(_) => {
                 debug!(
-                    "[Service | SoftDeleteMQTT] User MQTT not found: {}",
+                    "[Service | DeleteMQTT] User MQTT not found: {}",
                     username
                 );
                 return Err(MqttServiceError::MqttNotFound("User MQTT not found".into()));
             }
         };
 
-        self.repo_delete.soft_delete_mqtt(username).await?;
+        self.repo_delete.delete_mqtt(username).await?;
         debug!(
-            "[Service | SoftDeleteMQTT] Successfully soft deleted user MQTT: {}",
+            "[Service | DeleteMQTT] Successfully deleted user MQTT: {}",
             username
         );
         Ok(true)
@@ -57,7 +57,7 @@ impl SoftDeleteMqttService {
             return Err(MqttServiceError::BadRequest(errors));
         }
 
-        debug!("[Service | SoftDeleteMQTT] Username validation passed.");
+        debug!("[Service | DeleteMQTT] Username validation passed.");
         Ok(true)
     }
 }

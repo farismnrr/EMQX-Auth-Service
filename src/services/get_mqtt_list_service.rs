@@ -21,7 +21,6 @@ impl GetMqttListService {
                 username: mqtt.username,
                 password: mqtt.password,
                 is_superuser: mqtt.is_superuser,
-                is_deleted: mqtt.is_deleted,
             })
             .collect();
         debug!("[Service | GetMQTTList] User MQTT list retrieved successfully.");

@@ -1,13 +1,13 @@
 use crate::dtos::mqtt_dto::DeleteMqttDTO;
 use crate::dtos::response_dto::{ErrorResponseValidation, ResponseDTO};
 use crate::handler::handler_error::AppError;
+use crate::services::delete_mqtt_service::DeleteMqttService;
 use crate::services::service_error::MqttServiceError;
-use crate::services::soft_delete_mqtt_service::SoftDeleteMqttService;
 use actix_web::{HttpResponse, Responder, web};
 use std::sync::Arc;
 
 pub struct AppState {
-    pub soft_delete_mqtt_service: Arc<SoftDeleteMqttService>,
+    pub delete_mqtt_service: Arc<DeleteMqttService>,
 }
 
 #[utoipa::path(
@@ -15,7 +15,7 @@ pub struct AppState {
     path = "/mqtt/{username}",
     tag = "MQTT",
     params(
-        ("username" = String, Path, description = "Username of the client to soft delete")
+        ("username" = String, Path, description = "Username of the client to delete")
     ),
     responses(
         (status = 200, description = "User mqtt deleted successfully"),
@@ -27,15 +27,15 @@ pub struct AppState {
 )]
 /// Delete MQTT User
 ///
-/// Soft-deletes an existing MQTT user by their username.
-pub async fn soft_delete_mqtt(
+/// Hard-deletes an existing MQTT user by their username.
+pub async fn delete_mqtt(
     data: web::Data<AppState>,
     params: web::Path<DeleteMqttDTO>,
 ) -> impl Responder {
     let username = &params.username;
     match data
-        .soft_delete_mqtt_service
-        .soft_delete_mqtt(username)
+        .delete_mqtt_service
+        .delete_mqtt(username)
         .await
     {
         Ok(_) => HttpResponse::Ok().json(ResponseDTO::<()> {

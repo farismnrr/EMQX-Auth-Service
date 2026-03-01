@@ -33,15 +33,6 @@ impl MqttLoginService {
             }
         };
 
-        if mqtt.is_deleted {
-            debug!(
-                "[Service | CheckMQTTActive] User MQTT is deleted or inactive: {}",
-                dto.username
-            );
-            return Err(MqttServiceError::MqttNotActive(
-                "User MQTT is not active or deleted".into(),
-            ));
-        }
 
         match dto.method.unwrap() {
             AuthType::Credentials => {
