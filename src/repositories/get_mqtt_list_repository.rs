@@ -1,7 +1,7 @@
-use crate::entities::mqtt_entity::{Column, Entity as MqttUser, Model as MqttEntity};
+use crate::entities::mqtt_entity::{Entity as MqttUser, Model as MqttEntity};
 use crate::repositories::repository_error::MqttRepositoryError;
 use log::debug;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{DatabaseConnection, EntityTrait};
 
 pub struct GetMqttListRepository {
     db: DatabaseConnection,
@@ -16,7 +16,6 @@ impl GetMqttListRepository {
         debug!("[Repository | GetMQTTList] Fetching all user MQTT records from MySQL");
 
         let users = MqttUser::find()
-            .filter(Column::IsDeleted.eq(false))
             .all(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;

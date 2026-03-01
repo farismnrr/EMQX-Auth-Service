@@ -9,7 +9,6 @@ pub struct Model {
     #[sea_orm(unique)]
     pub username: String,
     pub password: String,
-    pub is_deleted: bool,
     pub is_superuser: bool,
 }
 

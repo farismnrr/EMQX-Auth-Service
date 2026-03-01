@@ -27,15 +27,6 @@ impl MqttAclService {
             }
         };
 
-        if mqtt.is_deleted {
-            debug!(
-                "[Service | CheckMQTTACL] User MQTT is deleted or inactive: {}",
-                dto.username
-            );
-            return Err(MqttServiceError::MqttNotActive(
-                "User MQTT is not active or deleted".into(),
-            ));
-        }
 
         if mqtt.is_superuser {
             debug!(

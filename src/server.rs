@@ -21,8 +21,8 @@ use crate::handler::mqtt_acl_handler::{AppState as MqttAclAppState, mqtt_acl_han
 use crate::handler::mqtt_login_handler::{
     AppState as MqttLoginAppState, login_with_credentials_handler,
 };
-use crate::handler::soft_delete_mqtt_handler::{
-    AppState as SoftDeleteMqttAppState, soft_delete_mqtt,
+use crate::handler::delete_mqtt_handler::{
+    AppState as DeleteMqttAppState, delete_mqtt,
 };
 
 use crate::services::create_mqtt_service::CreateMqttService;
@@ -30,12 +30,12 @@ use crate::services::get_mqtt_credentials_service::GetMqttCredentialsService;
 use crate::services::get_mqtt_list_service::GetMqttListService;
 use crate::services::mqtt_acl_service::MqttAclService;
 use crate::services::mqtt_login_service::MqttLoginService;
-use crate::services::soft_delete_mqtt_service::SoftDeleteMqttService;
+use crate::services::delete_mqtt_service::DeleteMqttService;
 
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
-use crate::repositories::soft_delete_mqtt_repository::SoftDeleteMqttRepository;
+use crate::repositories::delete_mqtt_repository::DeleteMqttRepository;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -45,7 +45,7 @@ use crate::repositories::soft_delete_mqtt_repository::SoftDeleteMqttRepository;
         crate::handler::get_mqtt_list_handler::get_mqtt_list_handler,
         crate::handler::mqtt_acl_handler::mqtt_acl_handler,
         crate::handler::mqtt_login_handler::login_with_credentials_handler,
-        crate::handler::soft_delete_mqtt_handler::soft_delete_mqtt
+        crate::handler::delete_mqtt_handler::delete_mqtt
     ),
     components(
         schemas(
@@ -157,7 +157,7 @@ pub async fn run_server() -> std::io::Result<()> {
     let create_mqtt_repo = Arc::new(CreateMqttRepository::new(db_conn.clone()));
     let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(db_conn.clone()));
     let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(db_conn.clone()));
-    let soft_delete_mqtt_repo = Arc::new(SoftDeleteMqttRepository::new(db_conn.clone()));
+    let delete_mqtt_repo = Arc::new(DeleteMqttRepository::new(db_conn.clone()));
 
     // =====================
     // 🛠️ Service Layer
@@ -175,9 +175,9 @@ pub async fn run_server() -> std::io::Result<()> {
         secret_key,
     ));
     let mqtt_acl_service = Arc::new(MqttAclService::new(Arc::clone(&get_by_username_repo)));
-    let soft_delete_mqtt_service = Arc::new(SoftDeleteMqttService::new(
+    let delete_mqtt_service = Arc::new(DeleteMqttService::new(
         Arc::clone(&get_by_username_repo),
-        Arc::clone(&soft_delete_mqtt_repo),
+        Arc::clone(&delete_mqtt_repo),
     ));
 
     // =====================
@@ -194,8 +194,8 @@ pub async fn run_server() -> std::io::Result<()> {
     });
     let mqtt_login_state = web::Data::new(MqttLoginAppState { mqtt_login_service });
     let mqtt_acl_state = web::Data::new(MqttAclAppState { mqtt_acl_service });
-    let soft_delete_mqtt_state = web::Data::new(SoftDeleteMqttAppState {
-        soft_delete_mqtt_service,
+    let delete_mqtt_state = web::Data::new(DeleteMqttAppState {
+        delete_mqtt_service,
     });
     let mysql_data = web::Data::new(db_conn.clone());
 
@@ -210,7 +210,7 @@ pub async fn run_server() -> std::io::Result<()> {
             .app_data(get_mqtt_list_state.clone())
             .app_data(mqtt_login_state.clone())
             .app_data(mqtt_acl_state.clone())
-            .app_data(soft_delete_mqtt_state.clone())
+            .app_data(delete_mqtt_state.clone())
             .app_data(mysql_data.clone())
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
@@ -230,7 +230,7 @@ pub async fn run_server() -> std::io::Result<()> {
                     .route("/check", web::post().to(login_with_credentials_handler))
                     .route("/credentials/{username}", web::get().to(get_mqtt_credentials_handler))
                     .route("/acl", web::post().to(mqtt_acl_handler))
-                    .route("/{username}", web::delete().to(soft_delete_mqtt))
+                    .route("/{username}", web::delete().to(delete_mqtt))
                     // Development only
                     .route("", web::get().to(get_mqtt_list_handler)),
             )

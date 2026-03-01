@@ -5,7 +5,6 @@ pub struct MqttDTO {
     pub username: String,
     pub password: String,
     pub is_superuser: bool,
-    pub is_deleted: bool,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]

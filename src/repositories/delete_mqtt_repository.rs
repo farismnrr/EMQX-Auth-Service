@@ -1,23 +1,20 @@
-use crate::entities::mqtt_entity::{Column, Entity as MqttUser, Model as MqttEntity};
+use crate::entities::mqtt_entity::{Column, Entity as MqttUser};
 use crate::repositories::repository_error::MqttRepositoryError;
 use log::{debug, error};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
-pub struct GetMqttByUsernameRepository {
+pub struct DeleteMqttRepository {
     db: DatabaseConnection,
 }
 
-impl GetMqttByUsernameRepository {
+impl DeleteMqttRepository {
     pub fn new(db: DatabaseConnection) -> Self {
-        GetMqttByUsernameRepository { db }
+        DeleteMqttRepository { db }
     }
 
-    pub async fn get_mqtt_by_username(
-        &self,
-        username: &str,
-    ) -> Result<MqttEntity, MqttRepositoryError> {
+    pub async fn delete_mqtt(&self, username: &str) -> Result<(), MqttRepositoryError> {
         debug!(
-            "[Repository | GetByUsername] Fetching user MQTT for username: {}",
+            "[Repository | Delete] Deleting user MQTT {} from MySQL",
             username
         );
 
@@ -29,15 +26,19 @@ impl GetMqttByUsernameRepository {
 
         match user {
             Some(m) => {
+                MqttUser::delete_by_id(m.id)
+                    .exec(&self.db)
+                    .await
+                    .map_err(MqttRepositoryError::SeaOrm)?;
                 debug!(
-                    "[Repository | GetByUsername] Successfully fetched user MQTT for username: {}",
+                    "[Repository | Delete] Successfully deleted user MQTT {}",
                     username
                 );
-                Ok(m)
+                Ok(())
             }
             None => {
                 error!(
-                    "[Repository | GetByUsername] User MQTT {} not found in MySQL",
+                    "[Repository | Delete] User MQTT {} not found in MySQL",
                     username
                 );
                 Err(MqttRepositoryError::NotFound)

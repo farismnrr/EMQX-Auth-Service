@@ -26,7 +26,6 @@ impl CreateMqttRepository {
         let new_user = ActiveModel {
             username: Set(username.to_owned()),
             password: Set(password_hash.to_owned()),
-            is_deleted: Set(false),
             is_superuser: Set(is_superuser),
             ..Default::default()
         };
