@@ -1,4 +1,5 @@
 use serde::Serialize;
+use utoipa::ToSchema;
 
 #[derive(Serialize)]
 pub struct ResponseDTO<'a, T = ()>
@@ -24,4 +25,14 @@ where
     pub result: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<D>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ErrorResponseValidation {
+    pub success: bool,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Vec<crate::services::service_error::ValidationError>>,
 }

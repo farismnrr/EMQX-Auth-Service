@@ -26,3 +26,5 @@ aes-gcm = "0.10.3"
 base64 = "0.22.1"
 rand = "0.8.5"
 migration = { path = "migration" }
+utoipa = { version = "5.4.0", features = ["actix_extras", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }

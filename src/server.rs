@@ -3,6 +3,9 @@ use chrono::Local;
 use log::{error, info};
 use std::io::Write;
 use std::sync::Arc;
+use utoipa::{Modify, OpenApi};
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::infrastructure::database::{DbType, close_db, init_db};
 use crate::middleware::api_key::ApiKeyMiddleware;
@@ -33,6 +36,50 @@ use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
 use crate::repositories::soft_delete_mqtt_repository::SoftDeleteMqttRepository;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::handler::create_mqtt_handler::create_mqtt_handler,
+        crate::handler::get_mqtt_credentials_handler::get_mqtt_credentials_handler,
+        crate::handler::get_mqtt_list_handler::get_mqtt_list_handler,
+        crate::handler::mqtt_acl_handler::mqtt_acl_handler,
+        crate::handler::mqtt_login_handler::login_with_credentials_handler,
+        crate::handler::soft_delete_mqtt_handler::soft_delete_mqtt
+    ),
+    components(
+        schemas(
+            crate::dtos::mqtt_dto::MqttDTO,
+            crate::dtos::mqtt_dto::GetMqttListDTO,
+            crate::dtos::mqtt_dto::CreateMqttDTO,
+            crate::dtos::mqtt_dto::MqttLoginDTO,
+            crate::dtos::mqtt_dto::MqttJwtDTO,
+            crate::dtos::mqtt_dto::AuthType,
+            crate::dtos::mqtt_dto::MqttAclDTO,
+            crate::dtos::mqtt_dto::DeleteMqttDTO,
+            crate::dtos::mqtt_dto::MqttCredentialsDTO,
+            crate::services::service_error::ValidationError,
+            crate::dtos::response_dto::ErrorResponseValidation
+        )
+    ),
+    tags(
+        (name = "MQTT", description = "MQTT Authentication API")
+    ),
+    modifiers(&SecurityAddon)
+)]
+struct ApiDoc;
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.as_mut().unwrap();
+        components.add_security_scheme(
+            "api_key",
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("Authorization"))),
+        );
+    }
+}
 
 async fn healthcheck() -> impl Responder {
     HttpResponse::Ok()
@@ -170,6 +217,11 @@ pub async fn run_server() -> std::io::Result<()> {
             .wrap(middleware::Compress::default())
             // 🩺 Root API — health check
             .route("/", web::get().to(healthcheck))
+            // 📚 Swagger UI
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
+            )
             // 👥 Mqtt endpoints
             .service(
                 web::scope("/mqtt")

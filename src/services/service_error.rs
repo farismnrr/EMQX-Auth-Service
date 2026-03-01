@@ -2,7 +2,7 @@ use crate::repositories::repository_error::MqttRepositoryError;
 use serde::Serialize;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ValidationError {
     pub field: String,
     pub message: String,
