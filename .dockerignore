@@ -1,0 +1,25 @@
+
+# Git
+.git
+.gitignore
+
+# Credentials & Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+keyfile.json
+keyfile.json.bak
+ca.key
+
+# Node/NPM
+node_modules
+npm-debug.log
+
+# Build
+dist
+build
+.dist
+.build
