@@ -13,6 +13,26 @@ pub struct GetMqttListDTO {
     pub users: Vec<MqttDTO>,
 }
 
+#[derive(Serialize)]
+pub struct PaginationInfo {
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+    pub total_pages: i64,
+}
+
+#[derive(Serialize)]
+pub struct GetMqttListPaginatedDTO {
+    pub users: Vec<MqttDTO>,
+    pub pagination: PaginationInfo,
+}
+
+#[derive(Deserialize)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CreateMqttDTO {
     pub username: String,
