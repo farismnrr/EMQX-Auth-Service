@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, ToSchema)]
 pub struct MqttDTO {
@@ -27,7 +27,7 @@ pub struct GetMqttListPaginatedDTO {
     pub pagination: PaginationInfo,
 }
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema, IntoParams)]
 pub struct PaginationQuery {
     pub page: Option<i64>,
     pub page_size: Option<i64>,
