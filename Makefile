@@ -1,125 +1,170 @@
 # Small Makefile helpers to control services defined in docker-compose.yml
 
 COMPOSE := docker compose
-COMPOSE_FILE := docker-compose.yml
+COMPOSE_DEV := docker compose -f docker-compose-dev.yml
 
-.PHONY: help docker docker\ run docker\ stop docker\ ps build push key dev clean start-mysql-dev stop-mysql-dev kill mqtt-create mqtt-delete mqtt-create-superuser
+.PHONY: help dev dev\ stop dev\ logs dev\ restart build push key clean start-mysql-dev stop-mysql-dev kill emqx emqx\ setup emqx\ logs emqx\ restart prod prod\ up prod\ down prod\ logs prod\ restart
+
 .DEFAULT_GOAL := help
 
 help:
 	@echo "EMQX Auth Service - Available Commands:"
 	@echo ""
 	@echo "  --- LOCAL DEV ---"
-	@echo "  make dev                  - Run with hot reload (cargo watch)"
-	@echo "  make key                  - Generate secure SHA256 hash"
-	@echo "  make kill                 - Kill processes on port 5500"
-	@echo "  make clean                - Clean build artifacts"
+	@echo "  make dev              - Start full dev environment (EMQX + Auth Service + MySQL)"
+	@echo "  make dev stop         - Stop all dev services"
+	@echo "  make dev logs         - View logs from all services"
+	@echo "  make dev restart      - Restart all dev services"
+	@echo "  make key              - Generate secure SHA256 hash"
+	@echo "  make clean            - Clean build artifacts"
 	@echo ""
-	@echo "  --- DOCKER & DEPLOY ---"
-	@echo "  make build                - Build Docker plugin image"
-	@echo "  make push                 - Push local image to GHCR"
-	@echo "  make pull                 - Pull latest images from GHCR"
-	@echo "  make docker ps            - Show running containers"
+	@echo "  --- EMQX BROKER ---"
+	@echo "  make emqx             - Start EMQX broker only"
+	@echo "  make emqx setup       - Run EMQX auto-configuration manually"
+	@echo "  make emqx logs        - View EMQX logs"
+	@echo "  make emqx restart     - Restart EMQX broker"
+	@echo ""
+	@echo "  --- PRODUCTION ---"
+	@echo "  make prod             - Start production environment (pull + up)"
+	@echo "  make prod up          - Start production services"
+	@echo "  make prod down        - Stop production services"
+	@echo "  make prod logs        - View production logs"
+	@echo "  make prod restart     - Restart production services"
 	@echo ""
 	@echo "  --- DATABASE ---"
-	@echo "  make start-mysql-dev      - Start dev MySQL container"
-	@echo "  make stop-mysql-dev       - Stop dev MySQL container"
+	@echo "  make start-mysql-dev  - Start dev MySQL container"
+	@echo "  make stop-mysql-dev   - Stop dev MySQL container"
 	@echo ""
-	@echo "  --- MQTT USER MANAGEMENT ---"
-	@echo "  make mqtt-create          - Create a regular MQTT user (auto SHA-512 password)"
-	@echo "  make mqtt-delete          - Delete an MQTT user"
-	@echo "  make mqtt-create-superuser - Create a superuser MQTT user (auto SHA-512 password)"
+	@echo "  --- DOCKER & DEPLOY ---"
+	@echo "  make build            - Build Docker plugin image"
+	@echo "  make push             - Push local image to GHCR"
+	@echo "  make pull             - Pull latest images from GHCR"
 	@echo ""
 
-# Docker management
-docker:
-	@echo "Usage: make docker <command> [service...]"
-	@echo "Commands: run, stop, ps"
-	@exit 1
+# ==============================================================================
+# Development Environment
+# ==============================================================================
 
-docker\ run:
-	@services="$(filter-out docker run,$(MAKECMDGOALS))"; \
-	if [ -z "$$services" ]; then \
-		echo "Specify service(s): make docker run rocksdb"; exit 1; \
-	fi; \
-	for svc in $$services; do \
-		echo "Starting $$svc..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) up -d $$svc; \
-	done
+## Start full development environment (EMQX + Auth Service + MySQL)
+dev:
+	@echo "🚀 Starting development environment..."
+	@echo ""
+	@echo "📦 Starting MySQL..."
+	@$(COMPOSE_DEV) up -d mysql --wait
+	@sleep 3
+	@echo ""
+	@echo "📦 Starting EMQX Broker..."
+	@$(COMPOSE_DEV) up -d emqx
+	@echo ""
+	@echo "⏳ Waiting for EMQX to initialize..."
+	@sleep 15
+	@echo ""
+	@echo "🔧 Running EMQX auto-configuration..."
+	@bash scripts/emqx-setup.sh
+	@echo ""
+	@echo "⏳ Waiting for Auth Service to start..."
+	@sleep 5
+	@echo ""
+	@echo "🚀 Starting Auth Service with hot reload..."
+	@cargo watch -x run
 
-docker\ stop:
-	@services="$(filter-out docker stop,$(MAKECMDGOALS))"; \
-	if [ -z "$$services" ]; then \
-		echo "Specify service(s): make docker stop rocksdb"; exit 1; \
-	fi; \
-	for svc in $$services; do \
-		echo "Stopping $$svc..."; \
-		$(COMPOSE) -f $(COMPOSE_FILE) stop $$svc; \
-	done
+## Stop all development services
+dev\ stop:
+	@echo "🛑 Stopping all development services..."
+	@pkill -f "cargo.*run" 2>/dev/null || true
+	@$(COMPOSE_DEV) down
+	@echo "✅ All services stopped"
 
-docker\ ps:
-	@services="$(filter-out docker ps,$(MAKECMDGOALS))"; \
-	if [ -z "$$services" ]; then \
-		$(COMPOSE) -f $(COMPOSE_FILE) ps; \
-	else \
-		$(COMPOSE) -f $(COMPOSE_FILE) ps $$services; \
-	fi
+## View logs from all services
+dev\ logs:
+	@$(COMPOSE_DEV) logs -f
 
-# Build project and Docker plugin
-build:
-	@bash autobuild.sh
+## Restart all development services
+dev\ restart: dev\ stop dev
 
-# Push to GHCR (no rebuild, just push local image)
-push:
-	@bash autobuild.sh --push
+# ==============================================================================
+# EMQX Broker Management
+# ==============================================================================
 
-# Generate random SHA256 hash
+## Start EMQX broker only
+emqx:
+	@echo "🚀 Starting EMQX broker..."
+	@$(COMPOSE_DEV) up -d emqx --wait
+	@sleep 10
+	@echo "✅ EMQX started"
+	@echo ""
+	@echo "💡 To configure authentication, run: make emqx setup"
+
+## Run EMQX auto-configuration manually
+emqx\ setup:
+	@echo "🔧 Running EMQX auto-configuration..."
+	@bash scripts/emqx-setup.sh
+
+## View EMQX logs
+emqx\ logs:
+	@docker logs -f dev-emqx
+
+## Restart EMQX broker
+emqx\ restart:
+	@echo "🔄 Restarting EMQX..."
+	@$(COMPOSE_DEV) restart emqx
+	@sleep 10
+	@echo "✅ EMQX restarted"
+
+# ==============================================================================
+# Database Management
+# ==============================================================================
+
+## Start dev MySQL container
+start-mysql-dev:
+	@$(COMPOSE_DEV) up -d mysql --wait
+	@echo "✅ MySQL started"
+
+## Stop dev MySQL container
+stop-mysql-dev:
+	@$(COMPOSE_DEV) down mysql
+	@echo "✅ MySQL stopped"
+
+# ==============================================================================
+# Utilities
+# ==============================================================================
+
+## Generate random SHA256 hash
 key:
 	@echo "Generated SHA256 hash:"
 	@openssl rand -hex 32 | sha256sum | awk '{print $$1}'
 
-# Start Database for development
-start-db:
-	@DB_TYPE=$$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'"); \
-	DB_TYPE=$${DB_TYPE:-mysql}; \
-	if [ "$$DB_TYPE" = "postgres" ]; then \
-		echo "🐘 Starting PostgreSQL..."; \
-		docker compose -f docker-compose-dev.yml up -d --wait --remove-orphans postgres; \
-	else \
-		echo "🐬 Starting MySQL..."; \
-		docker compose -f docker-compose-dev.yml up -d --wait --remove-orphans mysql; \
-	fi
-
-# Stop Database for development
-stop-db:
-	docker compose -f docker-compose-dev.yml down -v
-	rm -rf ./rocksdb-data
-
-# Run with hot reload
-dev:
-	@trap '$(MAKE) stop-db' EXIT INT TERM; \
-	set -e; \
-	$(MAKE) start-db; \
-	echo "🚀 Starting development server with hot reload..."; \
-	cargo watch -x run
-
-# Kill process running on port 5500
-kill:
-	@echo "🔪 Killing processes on port 5500..."
-	@lsof -ti:5500 | xargs -r kill -9 || echo "✅ No process running on port 5500"
-
-# Clean build artifacts
+## Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
 	@cargo clean
 	@docker rmi emqx-auth-service:latest 2>/dev/null || true
 	@echo "✓ Clean complete"
 
-# MQTT User Management
-# Reads AUTH_SERVICE_URL and API_KEY from .env, falls back to defaults
-AUTH_SERVICE_URL ?= $(shell grep -E '^AUTH_SERVICE_URL=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'")
-AUTH_SERVICE_URL := $(if $(AUTH_SERVICE_URL),$(AUTH_SERVICE_URL),http://127.0.0.1:5500)
-AUTH_API_KEY ?= $(shell grep -E '^API_KEY=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+## Kill process running on port 5500
+kill:
+	@echo "🔪 Killing processes on port 5500..."
+	@lsof -ti:5500 | xargs -r kill -9 || echo "✅ No process running on port 5500"
+
+## Start Database for development (MySQL or PostgreSQL)
+start-db:
+	@DB_TYPE=$$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'"); \
+	DB_TYPE=$${DB_TYPE:-mysql}; \
+	if [ "$$DB_TYPE" = "postgres" ]; then \
+		echo "🐘 Starting PostgreSQL..."; \
+		$(COMPOSE_DEV) up -d --wait --remove-orphans postgres; \
+	else \
+		echo "🐬 Starting MySQL..."; \
+		$(COMPOSE_DEV) up -d --wait --remove-orphans mysql; \
+	fi
+
+## Stop Database for development
+stop-db:
+	$(COMPOSE_DEV) down -v
+
+# ==============================================================================
+# MQTT User Management (Classic API)
+# ==============================================================================
 
 # Create a regular MQTT user with auto-generated password
 mqtt-create:
@@ -143,7 +188,7 @@ mqtt-create:
 		cat /tmp/mqtt_resp.json; echo; \
 	fi
 
-# Delete an MQTT user (soft delete)
+# Delete an MQTT user
 mqtt-delete:
 	@read -p "Enter MQTT username to delete: " username; \
 	echo ""; \
@@ -180,3 +225,62 @@ mqtt-create-superuser:
 		echo "❌ Failed to create superuser (HTTP $$response):"; \
 		cat /tmp/mqtt_resp.json; echo; \
 	fi
+
+# ==============================================================================
+# Docker & Deploy
+# ==============================================================================
+
+## Build project and Docker plugin
+build:
+	@bash autobuild.sh
+
+## Push to GHCR (no rebuild, just push local image)
+push:
+	@bash autobuild.sh --push
+
+# ==============================================================================
+# Production Environment
+# ==============================================================================
+
+## Start production environment (pull + up + setup)
+prod: prod\ up
+	@echo ""
+	@echo "⏳ Waiting for services to stabilize..."
+	@sleep 10
+	@echo ""
+	@echo "🔧 Running EMQX auto-configuration..."
+	@bash scripts/emqx-setup.sh || echo "⚠️  Auto-configuration may have already run"
+	@echo ""
+	@echo "✅ Production environment ready!"
+	@echo ""
+	@echo "📋 Service Status:"
+	@$(COMPOSE) ps
+
+## Start production services
+prod\ up:
+	@echo "🚀 Starting production environment..."
+	@echo ""
+	@echo "📦 Pulling latest images..."
+	@$(COMPOSE) pull
+	@echo ""
+	@echo "📦 Starting services..."
+	@$(COMPOSE) up -d --wait --remove-orphans
+	@echo ""
+	@echo "✅ Production services started"
+
+## Stop production services
+prod\ down:
+	@echo "🛑 Stopping production services..."
+	@$(COMPOSE) down
+	@echo "✅ Production services stopped"
+
+## View production logs
+prod\ logs:
+	@$(COMPOSE) logs -f
+
+## Restart production services
+prod\ restart:
+	@echo "🔄 Restarting production services..."
+	@$(COMPOSE) restart
+	@sleep 10
+	@echo "✅ Production services restarted"

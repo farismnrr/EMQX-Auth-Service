@@ -36,13 +36,14 @@ pub async fn login_with_credentials_handler(
         .login_with_credentials(body.into_inner())
         .await
     {
-        Ok((_, token)) => {
+        Ok((_, token, is_superuser)) => {
             if token.is_empty() {
                 HttpResponse::Ok().json(ResponseDTO::<()> {
                     success: true,
                     message: "User MQTT is active",
                     data: None,
                     result: Some("allow"),
+                    is_superuser: Some(is_superuser),
                 })
             } else {
                 HttpResponse::Ok().json(ResponseDTO::<MqttJwtDTO> {
@@ -50,6 +51,7 @@ pub async fn login_with_credentials_handler(
                     message: "User MQTT is active",
                     data: Some(MqttJwtDTO { token }),
                     result: Some("allow"),
+                    is_superuser: Some(is_superuser),
                 })
             }
         }

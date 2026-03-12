@@ -24,9 +24,8 @@ impl GetMqttCredentialsService {
             }
         };
 
-
         let decrypted_password = decrypt_password(&mqtt.password)
-            .map_err(|e| MqttServiceError::InternalError(e))?;
+            .map_err(MqttServiceError::InternalError)?;
 
         debug!("[Service | GetMqttCredentials] Credentials retrieved and decrypted for: {}", username);
 
