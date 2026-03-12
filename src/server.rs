@@ -5,7 +5,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::infrastructure::mqtt_client::MqttClientManager;
-use crate::infrastructure::mysql::{close_mysql, init_mysql};
+use crate::infrastructure::mysql::{close_db, init_db, DbType};
 use crate::middleware::api_key::ApiKeyMiddleware;
 use crate::middleware::logger_request::RequestLoggerMiddleware;
 use crate::middleware::powered_by::PoweredByMiddleware;
@@ -56,6 +56,7 @@ pub async fn run_server() -> std::io::Result<()> {
     let mysql_user = std::env::var("MYSQL_USER").expect("❌ MYSQL_USER is not set");
     let mysql_pass = std::env::var("MYSQL_PASSWORD").expect("❌ MYSQL_PASSWORD is not set");
     let mysql_db = std::env::var("MYSQL_DATABASE").expect("❌ MYSQL_DATABASE is not set");
+    let db_type = DbType::from_str(&std::env::var("DB_TYPE").unwrap_or_else(|_| "mysql".to_string()));
 
     // =====================
     // 🪵 Initialize logger with custom format + color
@@ -89,11 +90,11 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     // 🐬 MySQL Initialization (Sea-ORM)
     // =====================
-    let mysql_conn = init_mysql(&mysql_host, mysql_port, &mysql_user, &mysql_pass, &mysql_db)
+    let mysql_conn = init_db(db_type, &mysql_host, mysql_port, &mysql_user, &mysql_pass, &mysql_db)
         .await
         .map_err(|e| {
-            error!("❌ Failed to initialize MySQL via Sea-ORM: {}", e);
-            std::io::Error::other("Failed to initialize MySQL")
+            error!("❌ Failed to initialize database via Sea-ORM: {}", e);
+            std::io::Error::other("Failed to initialize database")
         })?;
 
     // =====================
@@ -256,8 +257,8 @@ pub async fn run_server() -> std::io::Result<()> {
         mqtt_manager.shutdown().await;
     }
 
-    info!("Closing MySQL connection...");
-    close_mysql(mysql_conn).await;
+    info!("Closing database connection...");
+    close_db(mysql_conn).await;
 
     server_result
 }

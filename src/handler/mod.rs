@@ -1,5 +1,4 @@
 pub mod create_mqtt_handler;
-pub mod delete_mqtt_handler;
 pub mod get_mqtt_credentials_handler;
 pub mod get_mqtt_list_handler;
 pub mod handler_error;

@@ -1,18 +1,19 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MqttDTO {
     pub username: String,
     pub password: String,
     pub is_superuser: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetMqttListDTO {
     pub users: Vec<MqttDTO>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PaginationInfo {
     pub total: i64,
     pub page: i64,
@@ -20,51 +21,51 @@ pub struct PaginationInfo {
     pub total_pages: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetMqttListPaginatedDTO {
     pub users: Vec<MqttDTO>,
     pub pagination: PaginationInfo,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct PaginationQuery {
     pub page: Option<i64>,
     pub page_size: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateMqttDTO {
     pub username: String,
     pub password: String,
     pub is_superuser: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct MqttLoginDTO {
     pub username: String,
     pub password: String,
     pub method: Option<AuthType>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MqttJwtDTO {
     pub token: String,
 }
 
-#[derive(Deserialize, PartialEq)]
+#[derive(Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum AuthType {
     Credentials,
     Jwt,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct MqttAclDTO {
     pub username: String,
     pub topic: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MqttCredentialsDTO {
     pub username: String,
     pub password: String,

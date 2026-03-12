@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // =============================================================================
 // Request DTOs
 // =============================================================================
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct AdminCreateUserRequest {
     pub request_id: String,
     pub username: String,
@@ -13,20 +14,20 @@ pub struct AdminCreateUserRequest {
     pub is_superuser: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct AdminDeleteUserRequest {
     pub request_id: String,
     pub username: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct AdminListUsersRequest {
     pub request_id: String,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct AdminGetUserByUsernameRequest {
     pub request_id: String,
     pub username: String,
@@ -36,14 +37,14 @@ pub struct AdminGetUserByUsernameRequest {
 // Response DTOs
 // =============================================================================
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AdminUserResponse {
     pub id: i32,
     pub username: String,
     pub is_superuser: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AdminPaginationInfo {
     pub total: i64,
     pub page: i64,
@@ -51,13 +52,13 @@ pub struct AdminPaginationInfo {
     pub total_pages: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AdminListUsersData {
     pub users: Vec<AdminUserResponse>,
     pub pagination: AdminPaginationInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, ToSchema)]
 #[serde(untagged)]
 pub enum AdminResponseData {
     CreateUser(AdminUserResponse),
@@ -67,7 +68,7 @@ pub enum AdminResponseData {
     Empty,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AdminResponse {
     pub request_id: String,
     pub success: bool,

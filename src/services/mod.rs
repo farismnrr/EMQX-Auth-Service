@@ -1,5 +1,4 @@
 pub mod create_mqtt_service;
-pub mod delete_mqtt_service;
 pub mod get_mqtt_credentials_service;
 pub mod get_mqtt_list_service;
 pub mod mqtt_acl_service;
