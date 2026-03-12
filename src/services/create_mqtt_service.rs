@@ -26,6 +26,7 @@ impl CreateMqttService {
     pub async fn create_mqtt(&self, dto: CreateMqttDTO) -> Result<bool, MqttServiceError> {
         self.create_mqtt_validation(&dto)?;
 
+        // Check if user already exists using the get repository
         if self
             .repo_get
             .get_mqtt_by_username(&dto.username)
@@ -37,10 +38,17 @@ impl CreateMqttService {
             ));
         }
 
-        let encrypted = encrypt_password(&dto.password).map_err(|e| MqttServiceError::InternalError(e))?;
+        let encrypted = encrypt_password(&dto.password).map_err(|e| MqttServiceError::InternalError(e.to_string()))?;
+        
+        // Use the new create method with DTO
         self.repo_create
-            .create_mqtt(&dto.username, &encrypted, dto.is_superuser)
+            .create(CreateMqttDTO {
+                username: dto.username.clone(),
+                password: encrypted,
+                is_superuser: dto.is_superuser,
+            })
             .await?;
+            
         debug!(
             "[Service | CreateMQTT] User MQTT created successfully: {}",
             &dto.username

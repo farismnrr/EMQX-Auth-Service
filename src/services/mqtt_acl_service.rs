@@ -27,7 +27,6 @@ impl MqttAclService {
             }
         };
 
-
         if mqtt.is_superuser {
             debug!(
                 "[Service | CheckMQTTACL] Superuser `{}` → access granted",
