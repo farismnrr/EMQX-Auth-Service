@@ -19,7 +19,7 @@ impl MqttLoginService {
     pub async fn login_with_credentials(
         &self,
         dto: MqttLoginDTO,
-    ) -> Result<(bool, String), MqttServiceError> {
+    ) -> Result<(bool, String, bool), MqttServiceError> {
         self.mqtt_input_credentials_validation(&dto)?;
 
         let mqtt = match self.repo.get_mqtt_by_username(&dto.username).await {
@@ -33,20 +33,10 @@ impl MqttLoginService {
             }
         };
 
-        if mqtt.is_deleted {
-            debug!(
-                "[Service | CheckMQTTActive] User MQTT is deleted or inactive: {}",
-                dto.username
-            );
-            return Err(MqttServiceError::MqttNotActive(
-                "User MQTT is not active or deleted".into(),
-            ));
-        }
-
         match dto.method.unwrap() {
             AuthType::Credentials => {
                 let decrypted_stored = decrypt_password(&mqtt.password)
-                    .map_err(|e| MqttServiceError::InternalError(e))?;
+                    .map_err(MqttServiceError::InternalError)?;
                 
                 let is_valid = dto.password == decrypted_stored;
                 if !is_valid {
@@ -59,7 +49,7 @@ impl MqttLoginService {
                     ));
                 }
 
-                Ok((true, String::new()))
+                Ok((true, String::new(), mqtt.is_superuser))
             }
             AuthType::Jwt => {
                 let token = create_jwt(&dto.username, &self.secret_key)
@@ -68,7 +58,7 @@ impl MqttLoginService {
                     "[Service | CheckMQTTActive] JWT token created for user MQTT: {}",
                     dto.username
                 );
-                Ok((true, token))
+                Ok((true, token, mqtt.is_superuser))
             }
         }
     }

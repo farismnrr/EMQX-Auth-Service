@@ -1,25 +1,61 @@
+version: '3.8'
+
 services:
+  ##==========================================================================
+  ## EMQX MQTT Broker (No GUI)
+  ##==========================================================================
+  emqx:
+    image: emqx/emqx:5.8.0
+    container_name: dev-emqx
+    restart: unless-stopped
+    
+    ## Use host network mode for direct access to host services
+    network_mode: "host"
+    
+    ## Volumes
+    volumes:
+      - ./scripts/emqx-setup.sh:/opt/emqx/emqx-setup.sh:ro
+      - emqx_data:/opt/emqx/data
+      - emqx_logs:/opt/emqx/log
+    
+    ## Environment Variables
+    environment:
+      EMQX_NAME: "emqx"
+      EMQX_HOST: "0.0.0.0"
+      EMQX_DASHBOARD__LISTENERS__HTTP__BIND: "18083"
+      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://host.docker.internal:5500}"
+      API_KEY: "${API_KEY}"
+    
+    ## Health Check
+    healthcheck:
+      test: ["CMD", "emqx_ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    
+    ## Init container to run setup script
+    init: true
+
+  ##==========================================================================
+  ## MySQL Database
+  ##==========================================================================
   mysql:
     image: mysql:8.0
     container_name: dev-mysql
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
-
     env_file:
       - .env
-
     environment:
       MYSQL_DATABASE: "${MYSQL_DATABASE}"
       MYSQL_USER: "${MYSQL_USER}"
       MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
-
     ports:
       - "${MYSQL_PORT}:3306"
-
     volumes:
       - mysql_dev_data:/var/lib/mysql
-
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 5s
@@ -28,3 +64,5 @@ services:
 
 volumes:
   mysql_dev_data:
+  emqx_data:
+  emqx_logs:

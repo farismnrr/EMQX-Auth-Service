@@ -49,6 +49,7 @@ pub async fn get_mqtt_list_handler(
                         },
                     }),
                     result: None,
+                    is_superuser: None,
                 })
             }
             Err(e) => e.to_http_response(),
@@ -61,6 +62,7 @@ pub async fn get_mqtt_list_handler(
                 message: "User MQTT list retrieved successfully",
                 data: Some(GetMqttListDTO { users }),
                 result: None,
+                is_superuser: None,
             }),
             Err(e) => e.to_http_response(),
         }
@@ -79,6 +81,7 @@ pub async fn get_mqtt_by_id_handler(
             message: "User MQTT retrieved successfully",
             data: Some(user),
             result: None,
+            is_superuser: None,
         }),
         Ok(None) => {
             let error = MqttServiceError::MqttNotFound("User not found".to_string());

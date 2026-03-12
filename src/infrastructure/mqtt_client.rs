@@ -110,6 +110,7 @@ async fn run_event_loop(
                     Err(e) => {
                         error!("❌ MQTT event loop error: {}", e);
                         // Reconnection is handled automatically by rumqttc
+                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                     }
                 }
             }

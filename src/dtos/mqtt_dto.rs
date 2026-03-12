@@ -5,7 +5,6 @@ pub struct MqttDTO {
     pub username: String,
     pub password: String,
     pub is_superuser: bool,
-    pub is_deleted: bool,
 }
 
 #[derive(Serialize)]
@@ -63,11 +62,6 @@ pub enum AuthType {
 pub struct MqttAclDTO {
     pub username: String,
     pub topic: String,
-}
-
-#[derive(Deserialize)]
-pub struct DeleteMqttDTO {
-    pub username: String,
 }
 
 #[derive(Serialize)]

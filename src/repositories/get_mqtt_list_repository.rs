@@ -16,7 +16,6 @@ impl GetMqttListRepository {
         debug!("[Repository | GetMQTTList] Fetching all user MQTT records from MySQL");
 
         let users = MqttUser::find()
-            .filter(Column::IsDeleted.eq(false))
             .order_by_asc(Column::Id)
             .all(&self.db)
             .await
@@ -43,14 +42,12 @@ impl GetMqttListRepository {
 
         // Get total count
         let total = MqttUser::find()
-            .filter(Column::IsDeleted.eq(false))
             .count(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;
 
         // Get paginated results
         let users = MqttUser::find()
-            .filter(Column::IsDeleted.eq(false))
             .order_by_asc(Column::Id)
             .offset(offset as u64)
             .limit(page_size as u64)
@@ -71,7 +68,6 @@ impl GetMqttListRepository {
 
         let user = MqttUser::find()
             .filter(Column::Username.eq(username))
-            .filter(Column::IsDeleted.eq(false))
             .one(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;
@@ -92,7 +88,6 @@ impl GetMqttListRepository {
         debug!("[Repository | GetMQTTById] Fetching user MQTT record with id {}", id);
 
         let user = MqttUser::find_by_id(id)
-            .filter(Column::IsDeleted.eq(false))
             .one(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;
@@ -114,7 +109,6 @@ impl GetMqttListRepository {
 
         let user = MqttUser::find()
             .filter(Column::Username.eq(username))
-            .filter(Column::IsDeleted.eq(false))
             .one(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;

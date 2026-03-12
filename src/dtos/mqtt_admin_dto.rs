@@ -41,7 +41,6 @@ pub struct AdminUserResponse {
     pub id: i32,
     pub username: String,
     pub is_superuser: bool,
-    pub is_deleted: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,19 +57,14 @@ pub struct AdminListUsersData {
     pub pagination: AdminPaginationInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum AdminResponseData {
     CreateUser(AdminUserResponse),
     ListUsers(AdminListUsersData),
     GetUser(AdminUserResponse),
+    #[default]
     Empty,
-}
-
-impl Default for AdminResponseData {
-    fn default() -> Self {
-        AdminResponseData::Empty
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -119,16 +113,6 @@ pub mod topics {
     pub const ADMIN_USERS_DELETE: &str = "admins/users/delete";
     pub const ADMIN_USERS_LIST: &str = "admins/users";
     pub const ADMIN_USERS_GET_BY_USERNAME: &str = "admins/users/";
-    pub const ADMIN_USERS_GET_BY_USERNAME_WILDCARD: &str = "admins/users/+";
-    
-    // Shared subscription group for multi-instance support
-    // Format: $share/{group_id}/{topic}
-    // Only one subscriber in the group receives each message
-    pub const SHARED_SUBSCRIPTION_GROUP: &str = "emqx_auth_service";
-    pub const ADMIN_USERS_CREATE_SHARED: &str = "$share/emqx_auth_service/admins/users/create";
-    pub const ADMIN_USERS_DELETE_SHARED: &str = "$share/emqx_auth_service/admins/users/delete";
-    pub const ADMIN_USERS_LIST_SHARED: &str = "$share/emqx_auth_service/admins/users";
-    pub const ADMIN_USERS_GET_BY_USERNAME_SHARED: &str = "$share/emqx_auth_service/admins/users/+";
 
     pub const RESPONSE_CREATE: &str = "admins/users/create/response";
     pub const RESPONSE_DELETE: &str = "admins/users/delete/response";

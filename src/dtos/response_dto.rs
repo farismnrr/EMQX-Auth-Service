@@ -10,6 +10,8 @@ where
     #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_superuser: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
 }
 

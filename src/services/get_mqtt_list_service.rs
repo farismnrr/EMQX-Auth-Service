@@ -21,7 +21,6 @@ impl GetMqttListService {
                 username: mqtt.username,
                 password: mqtt.password,
                 is_superuser: mqtt.is_superuser,
-                is_deleted: mqtt.is_deleted,
             })
             .collect();
         debug!("[Service | GetMQTTList] User MQTT list retrieved successfully.");
@@ -40,7 +39,6 @@ impl GetMqttListService {
                 username: mqtt.username,
                 password: mqtt.password,
                 is_superuser: mqtt.is_superuser,
-                is_deleted: mqtt.is_deleted,
             })
             .collect();
         debug!(
@@ -58,7 +56,6 @@ impl GetMqttListService {
                     username: m.username,
                     password: m.password,
                     is_superuser: m.is_superuser,
-                    is_deleted: m.is_deleted,
                 };
                 debug!("[Service | GetMQTTById] User MQTT retrieved successfully.");
                 Ok(Some(dto))
