@@ -41,6 +41,7 @@ pub async fn get_mqtt_credentials_handler(
             message: "Credentials retrieved successfully",
             data: Some(creds),
             result: None,
+            is_superuser: None,
         }),
         Err(e) => e.to_http_response_with_details(None::<String>),
     }
