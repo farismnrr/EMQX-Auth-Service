@@ -23,7 +23,6 @@ impl GetMqttByUsernameRepository {
 
         let user = MqttUser::find()
             .filter(Column::Username.eq(username))
-            .filter(Column::IsDeleted.eq(false))
             .one(&self.db)
             .await
             .map_err(MqttRepositoryError::SeaOrm)?;

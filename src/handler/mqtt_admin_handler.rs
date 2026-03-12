@@ -28,24 +28,22 @@ impl MqttAdminHandler {
     pub async fn start(&self) {
         info!("📡 Starting MQTT Admin Handler");
 
-        // Use shared subscriptions for multi-instance support
-        // Only one instance will receive each message (load balancing)
+        // Subscribe to admin topics (with wildcard for get by username)
         let topics_to_subscribe = [
-            (topics::ADMIN_USERS_CREATE_SHARED, QoS::AtLeastOnce),
-            (topics::ADMIN_USERS_DELETE_SHARED, QoS::AtLeastOnce),
-            (topics::ADMIN_USERS_LIST_SHARED, QoS::AtLeastOnce),
-            (topics::ADMIN_USERS_GET_BY_USERNAME_SHARED, QoS::AtLeastOnce),
+            (topics::ADMIN_USERS_CREATE.to_string(), QoS::AtLeastOnce),
+            (topics::ADMIN_USERS_DELETE.to_string(), QoS::AtLeastOnce),
+            (topics::ADMIN_USERS_LIST.to_string(), QoS::AtLeastOnce),
+            (format!("{}+", topics::ADMIN_USERS_GET_BY_USERNAME), QoS::AtLeastOnce),
         ];
 
         for (topic, qos) in topics_to_subscribe.iter() {
-            match self.mqtt_client.subscribe(*topic, *qos).await {
+            match self.mqtt_client.subscribe(topic, *qos).await {
                 Ok(_) => info!("📬 Subscribed to topic: {}", topic),
                 Err(e) => error!("❌ Failed to subscribe to topic {}: {}", topic, e),
             }
         }
 
         info!("✅ MQTT Admin Handler started successfully");
-        info!("⚠️  Using shared subscriptions for multi-instance support");
         info!("⚠️  Note: Message handling is done via event loop in mqtt_client.rs");
     }
 

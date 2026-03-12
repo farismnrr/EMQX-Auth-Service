@@ -69,7 +69,6 @@ impl MqttAdminService {
                             id: user.id,
                             username: user.username,
                             is_superuser: user.is_superuser,
-                            is_deleted: user.is_deleted,
                         };
                         AdminResponse::success(
                             request.request_id,
@@ -156,7 +155,6 @@ impl MqttAdminService {
                         id: u.id,
                         username: u.username,
                         is_superuser: u.is_superuser,
-                        is_deleted: u.is_deleted,
                     })
                     .collect();
 
@@ -207,7 +205,6 @@ impl MqttAdminService {
                     id: user.id,
                     username: user.username,
                     is_superuser: user.is_superuser,
-                    is_deleted: user.is_deleted,
                 };
                 info!("[MQTT Admin Service] User retrieved successfully: {}", username);
                 AdminResponse::success(

@@ -24,13 +24,8 @@ impl GetMqttCredentialsService {
             }
         };
 
-        if mqtt.is_deleted {
-            debug!("[Service | GetMqttCredentials] User MQTT is deleted: {}", username);
-            return Err(MqttServiceError::MqttNotActive("User MQTT is not active".into()));
-        }
-
         let decrypted_password = decrypt_password(&mqtt.password)
-            .map_err(|e| MqttServiceError::InternalError(e))?;
+            .map_err(MqttServiceError::InternalError)?;
 
         debug!("[Service | GetMqttCredentials] Credentials retrieved and decrypted for: {}", username);
 
