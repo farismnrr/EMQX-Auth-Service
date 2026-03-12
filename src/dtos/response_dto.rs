@@ -1,7 +1,7 @@
 use serde::Serialize;
 use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ResponseDTO<'a, T = ()>
 where
     T: Serialize,
@@ -16,7 +16,7 @@ where
     pub data: Option<T>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ErrorResponseDTO<'a, D = ()>
 where
     D: Serialize,
