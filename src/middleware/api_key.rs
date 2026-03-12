@@ -54,10 +54,10 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let expected_key = self.api_key.clone();
         let path = req.path().to_string();
-        let has_auth_header = req.headers().get(header::AUTHORIZATION).is_some();
+        let has_auth_header = req.headers().get("x-api-key").is_some();
         let auth_value = req
             .headers()
-            .get(header::AUTHORIZATION)
+            .get("x-api-key")
             .and_then(|v| v.to_str().ok())
             .map(str::trim)
             .unwrap_or("");
@@ -93,22 +93,5 @@ where
 }
 
 fn is_authorized(header_value: &str, expected_key: &str) -> bool {
-    if header_value == expected_key {
-        return true;
-    }
-
-    if let Some(token) = header_value
-        .strip_prefix("Bearer ")
-        .or_else(|| header_value.strip_prefix("bearer "))
-    {
-        return token.trim() == expected_key;
-    }
-
-    let mut parts = header_value.split_whitespace();
-    match (parts.next(), parts.next()) {
-        (Some(scheme), Some(token)) => {
-            scheme.eq_ignore_ascii_case("bearer") && token.trim() == expected_key
-        }
-        _ => false,
-    }
+    header_value == expected_key
 }

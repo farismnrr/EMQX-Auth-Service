@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, Responder, web};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::{GetMqttListDTO, GetMqttListPaginatedDTO, PaginationInfo, PaginationQuery};
-use crate::dtos::response_dto::ResponseDTO;
+use crate::dtos::response_dto::{ErrorResponseDTO, ResponseDTO};
 use crate::handler::handler_error::AppError;
 use crate::services::get_mqtt_list_service::GetMqttListService;
 use crate::services::service_error::MqttServiceError;
@@ -11,6 +11,23 @@ pub struct AppState {
     pub get_mqtt_list_service: Arc<GetMqttListService>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/mqtt",
+    tag = "MQTT",
+    params(
+        PaginationQuery
+    ),
+    responses(
+        (status = 200, description = "User MQTT list retrieved successfully", body = ResponseDTO)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+/// Get MQTT User List
+///
+/// Retrieves a list of all MQTT users, with optional pagination.
 pub async fn get_mqtt_list_handler(
     data: web::Data<AppState>,
     query: web::Query<PaginationQuery>,
@@ -69,6 +86,24 @@ pub async fn get_mqtt_list_handler(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/mqtt/{id}",
+    tag = "MQTT",
+    params(
+        ("id" = i32, Path, description = "ID of the MQTT user")
+    ),
+    responses(
+        (status = 200, description = "User MQTT retrieved successfully", body = ResponseDTO),
+        (status = 404, description = "User not found", body = ErrorResponseDTO)
+    ),
+    security(
+        ("api_key" = [])
+    )
+)]
+/// Get MQTT User by ID
+///
+/// Retrieves the details of a specific MQTT user by their ID.
 pub async fn get_mqtt_by_id_handler(
     data: web::Data<AppState>,
     path: web::Path<i32>,

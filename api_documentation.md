@@ -27,8 +27,8 @@ All HTTP endpoints (except the root health check) require authentication via an 
 
 ### HTTP Authentication
 
-**Header:** `Authorization: Bearer <API_KEY>` or `Authorization: <API_KEY>`
-**Mode:** Bearer token or direct string.
+**Header:** `x-api-key: <API_KEY>`
+**Mode:** Direct string.
 
 ---
 
@@ -53,7 +53,7 @@ Registers a new MQTT client in the system.
 - **Method:** `POST`
 - **Headers:**
   - `Content-Type: application/json`
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **Request Body:**
   ```json
   {
@@ -92,7 +92,7 @@ Verifies client credentials or JWT token.
 - **Method:** `POST`
 - **Headers:**
   - `Content-Type: application/json`
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **Request Body:**
   ```json
   {
@@ -136,7 +136,7 @@ Checks if a user has permission to access a specific topic.
 - **Method:** `POST`
 - **Headers:**
   - `Content-Type: application/json`
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **Request Body:**
   ```json
   {
@@ -186,7 +186,7 @@ Retrieves a list of all registered MQTT clients with pagination support.
 - **URL:** `/mqtt`
 - **Method:** `GET`
 - **Headers:**
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **Query Parameters:**
   - `page` (optional, default: `1`) - Page number
   - `page_size` (optional, default: `10`, max: `100`) - Number of items per page

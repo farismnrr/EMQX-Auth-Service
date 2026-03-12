@@ -1,4 +1,4 @@
-use log::{debug, error, info};
+use log::{debug, info, warn};
 use rumqttc::{AsyncClient, Event, Incoming, Packet};
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -75,6 +75,9 @@ async fn run_event_loop(
     mut shutdown_rx: broadcast::Receiver<()>,
     handler: Arc<MqttAdminHandler>,
 ) {
+    let mut retry_count = 0;
+    let max_retries = 5;
+
     loop {
         tokio::select! {
             _ = shutdown_rx.recv() => {
@@ -84,6 +87,7 @@ async fn run_event_loop(
             event = eventloop.poll() => {
                 match event {
                     Ok(event) => {
+                        retry_count = 0; // Reset retry count on successful poll
                         match event {
                             Event::Incoming(Packet::ConnAck(connack)) => {
                                 info!("🟢 MQTT connection acknowledged: {:?}", connack);
@@ -99,7 +103,7 @@ async fn run_event_loop(
                                 handler.handle_message(&publish.topic, &publish.payload).await;
                             }
                             Event::Incoming(Incoming::Disconnect) => {
-                                error!("❌ MQTT disconnected by broker");
+                                warn!("⚠️ MQTT disconnected by broker");
                             }
                             Event::Outgoing(rumqttc::Outgoing::PingReq) => {
                                 debug!("💓 MQTT ping sent");
@@ -108,9 +112,22 @@ async fn run_event_loop(
                         }
                     }
                     Err(e) => {
-                        error!("❌ MQTT event loop error: {}", e);
-                        // Reconnection is handled automatically by rumqttc
-                        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                        retry_count += 1;
+                        warn!("⚠️ MQTT event loop error (retry {}/{}): {}", retry_count, max_retries, e);
+
+                        // Check for fatal errors that shouldn't be retried indefinitely
+                        let error_str = e.to_string();
+                        if error_str.contains("NotAuthorized") || error_str.contains("Unauthorized") {
+                            warn!("❌ MQTT Fatal Error: Authorization failed. Stopping MQTT client to prevent infinite loops.");
+                            break;
+                        }
+
+                        if retry_count >= max_retries {
+                            warn!("❌ MQTT reached maximum retry limit ({}). Stopping MQTT client.", max_retries);
+                            break;
+                        }
+
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     }
                 }
             }

@@ -1,6 +1,6 @@
 use actix_web::{App, HttpResponse, HttpServer, Responder, middleware, web};
 use chrono::Local;
-use log::{error, info};
+use log::{error, info, warn};
 use std::io::Write;
 use std::sync::Arc;
 
@@ -172,8 +172,8 @@ pub async fn run_server() -> std::io::Result<()> {
                 mqtt_client_manager = Some(manager);
             }
             Err(e) => {
-                error!("❌ Failed to initialize MQTT Admin Client: {}", e);
-                error!("⚠️ MQTT Admin API will not be available");
+                warn!("⚠️ Failed to initialize MQTT Admin Client: {}", e);
+                warn!("⚠️ MQTT Admin API will not be available but service will continue to run");
             }
         }
     } else {
@@ -197,6 +197,63 @@ pub async fn run_server() -> std::io::Result<()> {
     let mysql_data = web::Data::new(mysql_conn.clone());
 
     // =====================
+    // 📖 OpenAPI Documentation
+    // =====================
+    use utoipa::OpenApi;
+    use utoipa_scalar::{Scalar, Servable};
+
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            crate::handler::create_mqtt_handler::create_mqtt_handler,
+            crate::handler::mqtt_login_handler::login_with_credentials_handler,
+            crate::handler::get_mqtt_credentials_handler::get_mqtt_credentials_handler,
+            crate::handler::mqtt_acl_handler::mqtt_acl_handler,
+            crate::handler::get_mqtt_list_handler::get_mqtt_list_handler,
+            crate::handler::get_mqtt_list_handler::get_mqtt_by_id_handler,
+        ),
+        components(
+            schemas(
+                crate::dtos::mqtt_dto::MqttDTO,
+                crate::dtos::mqtt_dto::CreateMqttDTO,
+                crate::dtos::mqtt_dto::MqttLoginDTO,
+                crate::dtos::mqtt_dto::AuthType,
+                crate::dtos::mqtt_dto::MqttAclDTO,
+                crate::dtos::mqtt_dto::MqttCredentialsDTO,
+                crate::dtos::mqtt_dto::GetMqttListDTO,
+                crate::dtos::mqtt_dto::PaginationInfo,
+                crate::dtos::mqtt_dto::GetMqttListPaginatedDTO,
+                crate::dtos::response_dto::ResponseDTO<'static>,
+                crate::dtos::response_dto::ErrorResponseDTO<'static>,
+                crate::dtos::response_dto::ErrorResponseValidation,
+                crate::services::service_error::ValidationError,
+            )
+        ),
+        tags(
+            (name = "MQTT", description = "MQTT Management Endpoints")
+        ),
+        modifiers(&SecurityAddon)
+    )]
+    struct ApiDoc;
+
+    struct SecurityAddon;
+
+    impl utoipa::Modify for SecurityAddon {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            if let Some(components) = openapi.components.as_mut() {
+                components.add_security_scheme(
+                    "api_key",
+                    utoipa::openapi::security::SecurityScheme::ApiKey(
+                        utoipa::openapi::security::ApiKey::Header(
+                            utoipa::openapi::security::ApiKeyValue::new("x-api-key"),
+                        ),
+                    ),
+                );
+            }
+        }
+    }
+
+    // =====================
     // 🌐 Start Server
     // =====================
     info!("🚀 Actix server running on http://0.0.0.0:5500");
@@ -211,6 +268,8 @@ pub async fn run_server() -> std::io::Result<()> {
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
             .wrap(middleware::Compress::default())
+            // 📖 Scalar UI
+            .service(Scalar::with_url("/openapi", ApiDoc::openapi()))
             // 🩺 Root API — health check
             .route("/", web::get().to(healthcheck))
             // 👥 Mqtt endpoints
