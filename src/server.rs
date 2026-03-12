@@ -1,13 +1,11 @@
 use actix_web::{App, HttpResponse, HttpServer, Responder, middleware, web};
 use chrono::Local;
-use log::{error, info};
+use log::{error, info, warn};
 use std::io::Write;
 use std::sync::Arc;
-use utoipa::{Modify, OpenApi};
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa_swagger_ui::SwaggerUi;
 
-use crate::infrastructure::database::{DbType, close_db, init_db};
+use crate::infrastructure::mqtt_client::MqttClientManager;
+use crate::infrastructure::mysql::{close_db, init_db, DbType};
 use crate::middleware::api_key::ApiKeyMiddleware;
 use crate::middleware::logger_request::RequestLoggerMiddleware;
 use crate::middleware::powered_by::PoweredByMiddleware;
@@ -16,70 +14,24 @@ use crate::handler::create_mqtt_handler::{AppState as CreateMqttAppState, create
 use crate::handler::get_mqtt_credentials_handler::{
     AppState as GetCredentialsAppState, get_mqtt_credentials_handler,
 };
-use crate::handler::get_mqtt_list_handler::{AppState as GetListAppState, get_mqtt_list_handler};
+use crate::handler::get_mqtt_list_handler::{
+    AppState as GetListAppState, get_mqtt_by_id_handler, get_mqtt_list_handler,
+};
 use crate::handler::mqtt_acl_handler::{AppState as MqttAclAppState, mqtt_acl_handler};
 use crate::handler::mqtt_login_handler::{
     AppState as MqttLoginAppState, login_with_credentials_handler,
-};
-use crate::handler::delete_mqtt_handler::{
-    AppState as DeleteMqttAppState, delete_mqtt,
 };
 
 use crate::services::create_mqtt_service::CreateMqttService;
 use crate::services::get_mqtt_credentials_service::GetMqttCredentialsService;
 use crate::services::get_mqtt_list_service::GetMqttListService;
+use crate::services::mqtt_admin_service::MqttAdminService;
 use crate::services::mqtt_acl_service::MqttAclService;
 use crate::services::mqtt_login_service::MqttLoginService;
-use crate::services::delete_mqtt_service::DeleteMqttService;
 
 use crate::repositories::create_mqtt_repository::CreateMqttRepository;
 use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
 use crate::repositories::get_mqtt_list_repository::GetMqttListRepository;
-use crate::repositories::delete_mqtt_repository::DeleteMqttRepository;
-
-#[derive(OpenApi)]
-#[openapi(
-    paths(
-        crate::handler::create_mqtt_handler::create_mqtt_handler,
-        crate::handler::get_mqtt_credentials_handler::get_mqtt_credentials_handler,
-        crate::handler::get_mqtt_list_handler::get_mqtt_list_handler,
-        crate::handler::mqtt_acl_handler::mqtt_acl_handler,
-        crate::handler::mqtt_login_handler::login_with_credentials_handler,
-        crate::handler::delete_mqtt_handler::delete_mqtt
-    ),
-    components(
-        schemas(
-            crate::dtos::mqtt_dto::MqttDTO,
-            crate::dtos::mqtt_dto::GetMqttListDTO,
-            crate::dtos::mqtt_dto::CreateMqttDTO,
-            crate::dtos::mqtt_dto::MqttLoginDTO,
-            crate::dtos::mqtt_dto::MqttJwtDTO,
-            crate::dtos::mqtt_dto::AuthType,
-            crate::dtos::mqtt_dto::MqttAclDTO,
-            crate::dtos::mqtt_dto::DeleteMqttDTO,
-            crate::dtos::mqtt_dto::MqttCredentialsDTO,
-            crate::services::service_error::ValidationError,
-            crate::dtos::response_dto::ErrorResponseValidation
-        )
-    ),
-    tags(
-        (name = "MQTT", description = "MQTT Authentication API")
-    ),
-    modifiers(&SecurityAddon)
-)]
-struct ApiDoc;
-
-struct SecurityAddon;
-
-impl Modify for SecurityAddon {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let components = openapi.components.as_mut().unwrap();
-        components.add_security_scheme(
-            "api_key",
-            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("Authorization"))),
-        );
-    }
-}
 
 async fn healthcheck() -> impl Responder {
     HttpResponse::Ok()
@@ -96,21 +48,15 @@ pub async fn run_server() -> std::io::Result<()> {
     let secret_key =
         std::env::var("SECRET_KEY").expect("❌ Environment variable SECRET_KEY is not set");
 
-    let db_type_str = std::env::var("DB_TYPE").unwrap_or_else(|_| "mysql".to_string());
-    let db_type = DbType::from_str(&db_type_str);
-
-    let db_host = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_HOST" } else { "MYSQL_HOST" })
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
-    let db_port = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_PORT" } else { "MYSQL_PORT" })
-        .unwrap_or_else(|_| if matches!(db_type, DbType::Postgres) { "5432" } else { "3306" }.to_string())
+    let mysql_host = std::env::var("MYSQL_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mysql_port = std::env::var("MYSQL_PORT")
+        .unwrap_or_else(|_| "3306".to_string())
         .parse::<u16>()
-        .unwrap_or(if matches!(db_type, DbType::Postgres) { 5432 } else { 3306 });
-    let db_user = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_USER" } else { "MYSQL_USER" })
-        .expect("❌ Database user is not set");
-    let db_pass = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_PASSWORD" } else { "MYSQL_PASSWORD" })
-        .expect("❌ Database password is not set");
-    let db_name = std::env::var(if matches!(db_type, DbType::Postgres) { "POSTGRES_DATABASE" } else { "MYSQL_DATABASE" })
-        .expect("❌ Database name is not set");
+        .unwrap_or(3306);
+    let mysql_user = std::env::var("MYSQL_USER").expect("❌ MYSQL_USER is not set");
+    let mysql_pass = std::env::var("MYSQL_PASSWORD").expect("❌ MYSQL_PASSWORD is not set");
+    let mysql_db = std::env::var("MYSQL_DATABASE").expect("❌ MYSQL_DATABASE is not set");
+    let db_type = DbType::from_str(&std::env::var("DB_TYPE").unwrap_or_else(|_| "mysql".to_string()));
 
     // =====================
     // 🪵 Initialize logger with custom format + color
@@ -142,9 +88,9 @@ pub async fn run_server() -> std::io::Result<()> {
     info!("🟢 Logging initialized successfully");
 
     // =====================
-    // 🗄️ Database Initialization (Sea-ORM)
+    // 🐬 MySQL Initialization (Sea-ORM)
     // =====================
-    let db_conn = init_db(db_type, &db_host, db_port, &db_user, &db_pass, &db_name)
+    let mysql_conn = init_db(db_type, &mysql_host, mysql_port, &mysql_user, &mysql_pass, &mysql_db)
         .await
         .map_err(|e| {
             error!("❌ Failed to initialize database via Sea-ORM: {}", e);
@@ -154,10 +100,9 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     // 🧩 Repository Layer
     // =====================
-    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(db_conn.clone()));
-    let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(db_conn.clone()));
-    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(db_conn.clone()));
-    let delete_mqtt_repo = Arc::new(DeleteMqttRepository::new(db_conn.clone()));
+    let create_mqtt_repo = Arc::new(CreateMqttRepository::new(mysql_conn.clone()));
+    let get_mqtt_list_repo = Arc::new(GetMqttListRepository::new(mysql_conn.clone()));
+    let get_by_username_repo = Arc::new(GetMqttByUsernameRepository::new(mysql_conn.clone()));
 
     // =====================
     // 🛠️ Service Layer
@@ -175,10 +120,65 @@ pub async fn run_server() -> std::io::Result<()> {
         secret_key,
     ));
     let mqtt_acl_service = Arc::new(MqttAclService::new(Arc::clone(&get_by_username_repo)));
-    let delete_mqtt_service = Arc::new(DeleteMqttService::new(
-        Arc::clone(&get_by_username_repo),
-        Arc::clone(&delete_mqtt_repo),
+
+    // =====================
+    // 🤖 MQTT Admin Service
+    // =====================
+    let mqtt_admin_service = Arc::new(MqttAdminService::new(
+        Arc::clone(&create_mqtt_repo),
+        Arc::clone(&get_mqtt_list_repo),
     ));
+
+    // =====================
+    // 🌐 Load MQTT Configuration
+    // =====================
+    let mqtt_admin_enabled = std::env::var("MQTT_ADMIN_ENABLED")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase() == "true";
+    let mqtt_broker_host = std::env::var("MQTT_BROKER_HOST")
+        .unwrap_or_else(|_| "localhost".to_string());
+    let mqtt_broker_port = std::env::var("MQTT_BROKER_PORT")
+        .unwrap_or_else(|_| "1883".to_string())
+        .parse::<u16>()
+        .unwrap_or(1883);
+    let mqtt_use_tls = std::env::var("MQTT_USE_TLS")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase() == "true";
+    let mqtt_admin_username = std::env::var("MQTT_ADMIN_USERNAME").ok();
+    let mqtt_admin_password = std::env::var("MQTT_ADMIN_PASSWORD").ok();
+    let mqtt_use_shared_sub = std::env::var("MQTT_USE_SHARED_SUB")
+        .unwrap_or_else(|_| "true".to_string())
+        .to_lowercase() == "true";
+
+    // =====================
+    // 🔌 Initialize MQTT Client (if enabled)
+    // =====================
+    let mut mqtt_client_manager: Option<MqttClientManager> = None;
+
+    if mqtt_admin_enabled {
+        info!("🔌 MQTT Admin API enabled, connecting to broker at {}:{} (TLS: {}, Shared Sub: {})", mqtt_broker_host, mqtt_broker_port, mqtt_use_tls, mqtt_use_shared_sub);
+
+        match MqttClientManager::new(
+            &mqtt_broker_host,
+            mqtt_broker_port,
+            "emqx_auth_admin",
+            mqtt_admin_username.as_deref(),
+            mqtt_admin_password.as_deref(),
+            mqtt_use_tls,
+            Arc::clone(&mqtt_admin_service),
+        ).await {
+            Ok(manager) => {
+                info!("✅ MQTT Admin Client initialized successfully");
+                mqtt_client_manager = Some(manager);
+            }
+            Err(e) => {
+                warn!("⚠️ Failed to initialize MQTT Admin Client: {}", e);
+                warn!("⚠️ MQTT Admin API will not be available but service will continue to run");
+            }
+        }
+    } else {
+        info!("ℹ️ MQTT Admin API is disabled (set MQTT_ADMIN_ENABLED=true to enable)");
+    }
 
     // =====================
     // 🚀 App State
@@ -194,10 +194,64 @@ pub async fn run_server() -> std::io::Result<()> {
     });
     let mqtt_login_state = web::Data::new(MqttLoginAppState { mqtt_login_service });
     let mqtt_acl_state = web::Data::new(MqttAclAppState { mqtt_acl_service });
-    let delete_mqtt_state = web::Data::new(DeleteMqttAppState {
-        delete_mqtt_service,
-    });
-    let mysql_data = web::Data::new(db_conn.clone());
+    let mysql_data = web::Data::new(mysql_conn.clone());
+
+    // =====================
+    // 📖 OpenAPI Documentation
+    // =====================
+    use utoipa::OpenApi;
+    use utoipa_scalar::{Scalar, Servable};
+
+    #[derive(OpenApi)]
+    #[openapi(
+        paths(
+            crate::handler::create_mqtt_handler::create_mqtt_handler,
+            crate::handler::mqtt_login_handler::login_with_credentials_handler,
+            crate::handler::get_mqtt_credentials_handler::get_mqtt_credentials_handler,
+            crate::handler::mqtt_acl_handler::mqtt_acl_handler,
+            crate::handler::get_mqtt_list_handler::get_mqtt_list_handler,
+            crate::handler::get_mqtt_list_handler::get_mqtt_by_id_handler,
+        ),
+        components(
+            schemas(
+                crate::dtos::mqtt_dto::MqttDTO,
+                crate::dtos::mqtt_dto::CreateMqttDTO,
+                crate::dtos::mqtt_dto::MqttLoginDTO,
+                crate::dtos::mqtt_dto::AuthType,
+                crate::dtos::mqtt_dto::MqttAclDTO,
+                crate::dtos::mqtt_dto::MqttCredentialsDTO,
+                crate::dtos::mqtt_dto::GetMqttListDTO,
+                crate::dtos::mqtt_dto::PaginationInfo,
+                crate::dtos::mqtt_dto::GetMqttListPaginatedDTO,
+                crate::dtos::response_dto::ResponseDTO<'static>,
+                crate::dtos::response_dto::ErrorResponseDTO<'static>,
+                crate::dtos::response_dto::ErrorResponseValidation,
+                crate::services::service_error::ValidationError,
+            )
+        ),
+        tags(
+            (name = "MQTT", description = "MQTT Management Endpoints")
+        ),
+        modifiers(&SecurityAddon)
+    )]
+    struct ApiDoc;
+
+    struct SecurityAddon;
+
+    impl utoipa::Modify for SecurityAddon {
+        fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+            if let Some(components) = openapi.components.as_mut() {
+                components.add_security_scheme(
+                    "api_key",
+                    utoipa::openapi::security::SecurityScheme::ApiKey(
+                        utoipa::openapi::security::ApiKey::Header(
+                            utoipa::openapi::security::ApiKeyValue::new("x-api-key"),
+                        ),
+                    ),
+                );
+            }
+        }
+    }
 
     // =====================
     // 🌐 Start Server
@@ -210,18 +264,14 @@ pub async fn run_server() -> std::io::Result<()> {
             .app_data(get_mqtt_list_state.clone())
             .app_data(mqtt_login_state.clone())
             .app_data(mqtt_acl_state.clone())
-            .app_data(delete_mqtt_state.clone())
             .app_data(mysql_data.clone())
             .wrap(PoweredByMiddleware)
             .wrap(RequestLoggerMiddleware)
             .wrap(middleware::Compress::default())
+            // 📖 Scalar UI
+            .service(Scalar::with_url("/openapi", ApiDoc::openapi()))
             // 🩺 Root API — health check
             .route("/", web::get().to(healthcheck))
-            // 📚 Swagger UI
-            .service(
-                SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
-            )
             // 👥 Mqtt endpoints
             .service(
                 web::scope("/mqtt")
@@ -230,9 +280,10 @@ pub async fn run_server() -> std::io::Result<()> {
                     .route("/check", web::post().to(login_with_credentials_handler))
                     .route("/credentials/{username}", web::get().to(get_mqtt_credentials_handler))
                     .route("/acl", web::post().to(mqtt_acl_handler))
-                    .route("/{username}", web::delete().to(delete_mqtt))
+                    .route("/{username}", web::delete().to(get_mqtt_by_id_handler))
                     // Development only
-                    .route("", web::get().to(get_mqtt_list_handler)),
+                    .route("", web::get().to(get_mqtt_list_handler))
+                    .route("/{id}", web::get().to(get_mqtt_by_id_handler)),
             )
     })
     .bind(("0.0.0.0", 5500))?
@@ -259,8 +310,14 @@ pub async fn run_server() -> std::io::Result<()> {
     // =====================
     info!("Shutting down server...");
 
+    // Shutdown MQTT client if enabled
+    if let Some(ref mqtt_manager) = mqtt_client_manager {
+        info!("🔌 Shutting down MQTT client...");
+        mqtt_manager.shutdown().await;
+    }
+
     info!("Closing database connection...");
-    close_db(db_conn).await;
+    close_db(mysql_conn).await;
 
     server_result
 }

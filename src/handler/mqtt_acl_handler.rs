@@ -41,12 +41,14 @@ pub async fn mqtt_acl_handler(
             message: "User has access",
             data: None,
             result: Some("allow"),
+            is_superuser: None,
         }),
         Ok(false) => HttpResponse::Ok().json(ResponseDTO::<()> {
             success: true,
             message: "User does not have access",
             data: None,
             result: Some("deny"),
+            is_superuser: None,
         }),
         Err(e) => match &e {
             MqttServiceError::BadRequest(validation_errors) => {

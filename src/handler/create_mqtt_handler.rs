@@ -41,6 +41,7 @@ pub async fn create_mqtt_handler(
             message: "User mqtt created successfully",
             data: None,
             result: None,
+            is_superuser: None,
         }),
         Err(e) => match &e {
             MqttServiceError::BadRequest(validation_errors) => {
