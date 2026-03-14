@@ -8,7 +8,7 @@ A high-performance authentication and authorization service for MQTT clients in 
 - Client authentication with fast password hashing
 - JWT token generation for authenticated sessions
 - Access Control List (ACL) validation
-- **MQTT Admin API** - Manage users via MQTT topics (create, delete, list, get by ID)
+- **MQTT RPC API** - Backend-to-service communication via MQTT topics
 - MySQL persistence for fast authentication and ACL checks
 - RESTful API with API key validation
 - Structured error handling and logging
@@ -96,7 +96,7 @@ curl http://localhost:5500/
 
 ## API Endpoints
 
-All endpoints require the `Authorization Bearer` header.
+All endpoints require the `x-api-key` header.
 
 ### Health Check
 
@@ -116,7 +116,7 @@ Content-Type: application/json
   "is_superuser": false
 }
 
-Response: 201 OK
+Response: 200 OK
 {
   "success": true,
   "message": "User MQTT created successfully"
@@ -228,19 +228,18 @@ Response: 200 OK
   "data": {
     "id": 1,
     "username": "client_id",
-    "is_superuser": false,
-    "is_deleted": false
+    "is_superuser": false
   }
 }
 ```
 
 ---
 
-## MQTT Admin API
+## MQTT RPC API (Backend Integration)
 
-The MQTT Admin API allows you to manage MQTT users through MQTT topics instead of HTTP. This is useful for administrative operations performed directly over MQTT.
+The MQTT RPC API enables backend-to-auth-service communication over MQTT. It uses a request-reply pattern with per-requester reply topics.
 
-### Enable MQTT Admin API
+### Enable MQTT RPC API
 
 Set the following environment variables:
 
@@ -248,100 +247,114 @@ Set the following environment variables:
 MQTT_ADMIN_ENABLED=true
 MQTT_BROKER_HOST=localhost
 MQTT_BROKER_PORT=1883
+MQTT_ADMIN_ALLOWED_REQUESTERS=iotnet-backend  # Comma-separated list
 ```
 
 ### Request/Response Format
 
-All MQTT messages use JSON format:
+All MQTT RPC messages use JSON format with envelope structure:
 
-**Request:**
+**Request Envelope:**
 ```json
 {
+  "schema_version": 1,
   "request_id": "unique-uuid-here",
+  "reply_to": "iotnet/auth/replies/backend-instance-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
   // ... operation-specific fields
 }
 ```
 
-**Response:**
+**Response Envelope:**
 ```json
 {
+  "schema_version": 1,
   "request_id": "unique-uuid-here",
   "success": true,
   "message": "Operation completed successfully",
+  "code": null,
   "data": { /* operation-specific data */ }
 }
 ```
 
-### MQTT Admin Topics
+### MQTT RPC Topics
 
 | Topic | Method | Description |
 |-------|--------|-------------|
-| `admins/users/create` | PUBLISH | Create a new MQTT user |
-| `admins/users/delete` | PUBLISH | Delete an existing MQTT user |
-| `admins/users` | PUBLISH | List users with pagination |
-| `admins/users/{user_id}` | SUBSCRIBE | Get user by ID |
+| `iotnet/auth/commands/users.create` | PUBLISH | Create a new MQTT user |
+| `iotnet/auth/commands/users.delete` | PUBLISH | Delete an existing MQTT user |
+| `iotnet/auth/commands/users.get` | PUBLISH | Get user by username |
+| `iotnet/auth/commands/tokens.issue` | PUBLISH | Issue JWT token for user |
+| `iotnet/auth/commands/tokens.verify` | PUBLISH | Verify user password |
 
 ### Response Topics
 
-| Topic | Description |
-|-------|-------------|
-| `admins/users/create/response` | Response for create operations |
-| `admins/users/delete/response` | Response for delete operations |
-| `admins/users/list/response` | Response for list operations |
-| `admins/users/detail/response` | Response for get by ID operations |
+Responses are published to the `reply_to` topic specified in the request:
+- Format: `iotnet/auth/replies/{requested_by}`
+- Example: `iotnet/auth/replies/backend-prod-1`
 
-### Example: Create User via MQTT
+### Security Model
+
+1. **Allowed Requesters**: Only requesters in `MQTT_ADMIN_ALLOWED_REQUESTERS` can issue commands
+2. **Reply Topic Binding**: `reply_to` must exactly match `iotnet/auth/replies/{requested_by}`
+3. **Token Issuance Protection**: For `tokens.issue`, `target_user` must match `requested_by` (prevents minting tokens for other users)
+4. **Timestamp Validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
+
+### Example: Create User via MQTT RPC
 
 ```json
-// Publish to: admins/users/create
+// Publish to: iotnet/auth/commands/users.create
 {
+  "schema_version": 1,
   "request_id": "req-123-abc",
+  "reply_to": "iotnet/auth/replies/backend-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
   "username": "new_user",
   "password": "secure_password_123",
   "is_superuser": false
 }
 
-// Response on: admins/users/create/response
+// Response on: iotnet/auth/replies/backend-1
 {
+  "schema_version": 1,
   "request_id": "req-123-abc",
   "success": true,
   "message": "User created successfully",
-  "data": {
-    "id": 42,
-    "username": "new_user",
-    "is_superuser": false
-  }
+  "code": null,
+  "data": null
 }
 ```
 
-### Example: List Users with Pagination
+### Example: Issue Token via MQTT RPC
 
 ```json
-// Publish to: admins/users
+// Publish to: iotnet/auth/commands/tokens.issue
 {
-  "request_id": "req-789-ghi",
-  "page": 1,
-  "page_size": 10
+  "schema_version": 1,
+  "request_id": "req-456-def",
+  "reply_to": "iotnet/auth/replies/backend-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001",
+  "target_user": "iotnet-backend"  // Must match requested_by
 }
 
-// Response on: admins/users/list/response
+// Response on: iotnet/auth/replies/backend-1
 {
-  "request_id": "req-789-ghi",
+  "schema_version": 1,
+  "request_id": "req-456-def",
   "success": true,
-  "message": "Users retrieved successfully",
+  "message": "Token issued successfully",
+  "code": null,
   "data": {
-    "users": [...],
-    "pagination": {
-      "total": 50,
-      "page": 1,
-      "page_size": 10,
-      "total_pages": 5
-    }
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
 
-For complete MQTT Admin API documentation, see [api_documentation.md](api_documentation.md#mqtt-admin-api).
+For complete MQTT RPC API documentation, see [api_documentation.md](api_documentation.md#mqtt-rpc-api-backend-integration).
 
 ## Environment Variables
 
@@ -355,9 +368,14 @@ For complete MQTT Admin API documentation, see [api_documentation.md](api_docume
 | `SECRET_KEY`         | SHA256 hash for JWT signing        | Yes      | -           |
 | `API_KEY`            | API key for request authentication | Yes      | -           |
 | `LOG_LEVEL`          | Logging level (info, debug, warn)  | No       | `info`      |
-| `MQTT_ADMIN_ENABLED` | Enable MQTT Admin API              | No       | `false`     |
+| `MQTT_ADMIN_ENABLED` | Enable MQTT RPC API                | No       | `false`     |
 | `MQTT_BROKER_HOST`   | MQTT broker host                   | No       | `localhost` |
 | `MQTT_BROKER_PORT`   | MQTT broker port                   | No       | `1883`      |
+| `MQTT_USE_TLS`       | Use TLS for MQTT connection        | No       | `false`     |
+| `MQTT_ADMIN_USERNAME`| MQTT client username (superuser)   | No       | -           |
+| `MQTT_ADMIN_PASSWORD`| MQTT client password               | No       | -           |
+| `MQTT_ADMIN_ALLOWED_REQUESTERS` | Comma-separated list of allowed requesters | No | `iotnet-backend` |
+| `MQTT_PASS_ENCRYPTION_KEY` | AES-256 encryption key (64 hex chars) | Yes | -   |
 
 ## Make Commands
 
@@ -377,10 +395,26 @@ src/
 ├── main.rs                    # Entry point
 ├── server.rs                  # HTTP server configuration
 ├── handler/                   # Request handlers
+│   ├── rest/                  # REST API handlers
+│   │   ├── mod.rs
+│   │   ├── create_user.rs
+│   │   ├── check_login.rs
+│   │   ├── check_acl.rs
+│   │   ├── get_credentials.rs
+│   │   ├── list_users.rs
+│   │   └── get_user_by_id.rs
+│   └── mqtt/                  # MQTT RPC handlers
+│       ├── mod.rs
+│       ├── common.rs
+│       ├── create_user.rs
+│       ├── delete_user.rs
+│       ├── get_user.rs
+│       ├── issue_token.rs
+│       └── verify_password.rs
 ├── services/                  # Business logic
 ├── repositories/              # Data access layer
 ├── middleware/                # HTTP middleware
-├── infrastructure/            # RocksDB utilities
+├── infrastructure/            # Database utilities
 ├── entities/                  # Domain models
 ├── dtos/                      # Data transfer objects
 └── utils/                     # Utilities

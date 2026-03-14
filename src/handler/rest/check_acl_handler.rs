@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::MqttAclDTO;
@@ -27,7 +27,7 @@ pub struct AppState {
 /// Check MQTT ACL Authorization
 ///
 /// Verifies whether the specified MQTT user has permissions to access the given topic.
-pub async fn mqtt_acl_handler(
+pub async fn check_acl_handler(
     data: web::Data<AppState>,
     body: web::Json<MqttAclDTO>,
 ) -> impl Responder {

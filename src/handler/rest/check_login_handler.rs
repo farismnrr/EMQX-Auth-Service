@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::{MqttJwtDTO, MqttLoginDTO};
@@ -27,7 +27,7 @@ pub struct AppState {
 /// Check MQTT Login
 ///
 /// Validates an MQTT user's login credentials. Returns an access token if successful.
-pub async fn login_with_credentials_handler(
+pub async fn check_login_handler(
     data: web::Data<AppState>,
     body: web::Json<MqttLoginDTO>,
 ) -> impl Responder {

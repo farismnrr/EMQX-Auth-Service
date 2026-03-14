@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, http::StatusCode};
+use actix_web::{http::StatusCode, HttpResponse};
 use serde::Serialize;
 
 use crate::dtos::response_dto::ErrorResponseDTO;

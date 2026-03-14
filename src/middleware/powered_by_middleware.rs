@@ -1,9 +1,9 @@
 use actix_web::{
-    Error,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     http::header,
+    Error,
 };
-use futures_util::future::{LocalBoxFuture, Ready, ok};
+use futures_util::future::{ok, LocalBoxFuture, Ready};
 use log::debug;
 
 #[derive(Clone)]

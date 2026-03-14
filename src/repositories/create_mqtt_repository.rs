@@ -28,15 +28,11 @@ impl CreateMqttRepository {
 
         match MqttUser::insert(new_user).exec(&self.db).await {
             Ok(_) => {
-                debug!(
-                    "[Repository | CreateMQTT] User MQTT successfully written to MySQL",
-                );
+                debug!("[Repository | CreateMQTT] User MQTT successfully written to MySQL",);
                 Ok(())
             }
             Err(e) => {
-                error!(
-                    "[Repository | CreateMQTT] Failed to write user MQTT to MySQL: {e}",
-                );
+                error!("[Repository | CreateMQTT] Failed to write user MQTT to MySQL: {e}",);
                 Err(MqttRepositoryError::SeaOrm(e))
             }
         }

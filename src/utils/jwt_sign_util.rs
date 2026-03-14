@@ -1,6 +1,6 @@
 use crate::dtos::jwt_dto::Claims;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{EncodingKey, Header, encode, errors::Error as JwtError};
+use jsonwebtoken::{encode, errors::Error as JwtError, EncodingKey, Header};
 
 pub fn create_jwt(username: &str, secret: &str) -> Result<String, JwtError> {
     let now = Utc::now();

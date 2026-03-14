@@ -26,12 +26,6 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(MqttUsers::Password).string().not_null())
                     .col(
-                        ColumnDef::new(MqttUsers::IsDeleted)
-                            .boolean()
-                            .not_null()
-                            .default(false),
-                    )
-                    .col(
                         ColumnDef::new(MqttUsers::IsSuperuser)
                             .boolean()
                             .not_null()
@@ -55,6 +49,5 @@ enum MqttUsers {
     Id,
     Username,
     Password,
-    IsDeleted,
     IsSuperuser,
 }

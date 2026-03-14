@@ -1,10 +1,7 @@
-use aes_gcm::{
-    Aes256Gcm, KeyInit, Nonce,
-    aead::Aead,
-};
-use base64::{Engine as _, engine::general_purpose};
-use std::env;
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+use base64::{engine::general_purpose, Engine as _};
 use rand::Rng;
+use std::env;
 
 pub fn encrypt_password(password: &str) -> Result<String, String> {
     let key_hex = env::var("MQTT_PASS_ENCRYPTION_KEY")
@@ -57,7 +54,9 @@ pub fn decrypt_password(encrypted_payload: &str) -> Result<String, String> {
 
     let (nonce_bytes, ciphertext) = data.split_at(12);
     // Nonce::clone_from_slice avoids GenericArray::from_slice
-    let nonce_arr: [u8; 12] = nonce_bytes.try_into().map_err(|_| "Invalid nonce length".to_string())?;
+    let nonce_arr: [u8; 12] = nonce_bytes
+        .try_into()
+        .map_err(|_| "Invalid nonce length".to_string())?;
     let nonce = Nonce::from(nonce_arr);
 
     let plaintext = cipher

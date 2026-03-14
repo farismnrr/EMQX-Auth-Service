@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
 use crate::dtos::mqtt_dto::CreateMqttDTO;
@@ -27,7 +27,7 @@ pub struct AppState {
 /// Create MQTT User
 ///
 /// Creates a new MQTT user or superuser with a username and password.
-pub async fn create_mqtt_handler(
+pub async fn create_user_handler(
     data: web::Data<AppState>,
     body: web::Json<CreateMqttDTO>,
 ) -> impl Responder {

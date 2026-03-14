@@ -2,37 +2,62 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 // =============================================================================
-// Request DTOs
+// RPC-style Request DTOs (for backend MQTT RPC and REST)
 // =============================================================================
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
-pub struct AdminCreateUserRequest {
+pub struct MqttRpcRequestEnvelope {
+    pub schema_version: u8,
     pub request_id: String,
+    pub reply_to: String,
+    pub requested_by: String,
+    pub timestamp: i64,
+    /// Optional: Target user for the operation.
+    #[serde(default)]
+    pub target_user: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct MqttRpcRequest<T> {
+    #[serde(flatten)]
+    pub envelope: MqttRpcRequestEnvelope,
+    #[serde(flatten)]
+    pub data: T,
+}
+
+impl<T> MqttRpcRequest<T> {
+    pub fn request_id(&self) -> &str {
+        &self.envelope.request_id
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct RpcCreateUserData {
     pub username: String,
     pub password: String,
-    #[serde(default)]
     pub is_superuser: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
-pub struct AdminDeleteUserRequest {
-    pub request_id: String,
+pub struct RpcDeleteUserData {
     pub username: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
-pub struct AdminListUsersRequest {
-    pub request_id: String,
-    pub page: Option<i64>,
-    pub page_size: Option<i64>,
-}
-
-#[derive(Debug, Deserialize, Serialize, ToSchema)]
-pub struct AdminGetUserByUsernameRequest {
-    pub request_id: String,
+pub struct RpcGetUserData {
     pub username: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct RpcIssueTokenData {
+    pub username: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
+pub struct RpcVerifyPasswordData {
+    pub username: String,
+    pub password: String,
+}
 // =============================================================================
 // Response DTOs
 // =============================================================================
@@ -44,79 +69,83 @@ pub struct AdminUserResponse {
     pub is_superuser: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AdminPaginationInfo {
-    pub total: i64,
-    pub page: i64,
-    pub page_size: i64,
-    pub total_pages: i64,
-}
+// =============================================================================
+// RPC Response DTOs (for backend MQTT RPC and REST)
+// =============================================================================
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AdminListUsersData {
-    pub users: Vec<AdminUserResponse>,
-    pub pagination: AdminPaginationInfo,
-}
-
-#[derive(Debug, Serialize, Deserialize, Default, ToSchema)]
-#[serde(untagged)]
-pub enum AdminResponseData {
-    CreateUser(AdminUserResponse),
-    ListUsers(AdminListUsersData),
-    GetUser(AdminUserResponse),
-    #[default]
-    Empty,
-}
-
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AdminResponse {
+pub struct MqttRpcResponse<T> {
+    pub schema_version: u8,
     pub request_id: String,
     pub success: bool,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<AdminResponseData>,
+    pub code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub errors: Option<Vec<String>>,
+    pub data: Option<T>,
 }
 
-impl AdminResponse {
-    pub fn success(request_id: String, message: String, data: Option<AdminResponseData>) -> Self {
+impl<T> MqttRpcResponse<T> {
+    pub fn success(request_id: String, message: String, data: Option<T>) -> Self {
         Self {
+            schema_version: 1,
             request_id,
             success: true,
             message,
+            code: None,
             data,
-            errors: None,
         }
     }
 
-    pub fn error(
-        request_id: String,
-        message: String,
-        errors: Option<Vec<String>>,
-    ) -> Self {
+    pub fn error(request_id: String, message: String, code: Option<String>) -> Self {
         Self {
+            schema_version: 1,
             request_id,
             success: false,
             message,
+            code,
             data: None,
-            errors,
         }
     }
 }
 
 // =============================================================================
-// MQTT Topic Constants
+// Error codes for RPC responses
+// =============================================================================
+#[allow(dead_code)]
+pub mod error_codes {
+    pub const USER_ALREADY_EXISTS: &str = "USER_ALREADY_EXISTS";
+    pub const USER_NOT_FOUND: &str = "USER_NOT_FOUND";
+    pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
+    pub const JWT_ISSUE_FAILED: &str = "JWT_ISSUE_FAILED";
+    pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+    pub const UNAUTHORIZED_COMMAND: &str = "UNAUTHORIZED_COMMAND";
+}
+
+// =============================================================================
+// MQTT RPC Topic Constants
 // =============================================================================
 
+#[allow(dead_code)]
 pub mod topics {
-    pub const ADMIN_USERS_CREATE: &str = "admins/users/create";
-    pub const ADMIN_USERS_DELETE: &str = "admins/users/delete";
-    pub const ADMIN_USERS_LIST: &str = "admins/users";
-    pub const ADMIN_USERS_GET_BY_USERNAME: &str = "admins/users/";
+    /// Prefix for all MQTT RPC command topics
+    pub const RPC_COMMAND_PREFIX: &str = "iotnet/auth/commands";
 
-    pub const RESPONSE_CREATE: &str = "admins/users/create/response";
-    pub const RESPONSE_DELETE: &str = "admins/users/delete/response";
-    pub const RESPONSE_LIST: &str = "admins/users/list/response";
-    pub const RESPONSE_DETAIL: &str = "admins/users/detail/response";
+    /// Topic to create a new MQTT user
+    pub const RPC_COMMAND_USERS_CREATE: &str = "iotnet/auth/commands/users.create";
+
+    /// Topic to delete an MQTT user
+    pub const RPC_COMMAND_USERS_DELETE: &str = "iotnet/auth/commands/users.delete";
+
+    /// Topic to retrieve an MQTT user's data
+    pub const RPC_COMMAND_USERS_GET: &str = "iotnet/auth/commands/users.get";
+
+    /// Topic to issue a JWT token for an MQTT user
+    pub const RPC_COMMAND_TOKENS_ISSUE: &str = "iotnet/auth/commands/tokens.issue";
+
+    /// Topic to verify an MQTT user's password
+    pub const RPC_COMMAND_TOKENS_VERIFY: &str = "iotnet/auth/commands/tokens.verify";
+
+    /// Prefix for all MQTT RPC reply topics (must append requester_id)
+    pub const RPC_REPLY_PREFIX: &str = "iotnet/auth/replies";
 }

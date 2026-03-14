@@ -1,6 +1,6 @@
 # EMQX Auth Service API Documentation
 
-Complete API documentation for the EMQX Auth Service, including HTTP REST API and MQTT-based Admin API.
+Complete API documentation for the EMQX Auth Service, including HTTP REST API and MQTT RPC API.
 
 ## Table of Contents
 
@@ -12,12 +12,11 @@ Complete API documentation for the EMQX Auth Service, including HTTP REST API an
    - [Delete MQTT Client](#5-delete-mqtt-client)
    - [List MQTT Clients](#6-list-mqtt-clients)
    - [Get MQTT Client by ID](#7-get-mqtt-client-by-id)
-2. [MQTT Admin API](#mqtt-admin-api)
-   - [Authentication](#mqtt-authentication)
-   - [Create User](#1-create-user)
-   - [Delete User](#2-delete-user)
-   - [List Users](#3-list-users)
-   - [Get User by ID](#4-get-user-by-id)
+2. [MQTT RPC API](#mqtt-rpc-api-backend-integration)
+   - [Overview](#overview)
+   - [Message Format](#message-format)
+   - [Security Model](#security-model)
+   - [Commands](#commands)
 
 ---
 
@@ -28,7 +27,6 @@ All HTTP endpoints (except the root health check) require authentication via an 
 ### HTTP Authentication
 
 **Header:** `x-api-key: <API_KEY>`
-**Mode:** Direct string.
 
 ---
 
@@ -71,16 +69,6 @@ Registers a new MQTT client in the system.
       "message": "User mqtt created successfully"
     }
     ```
-- **Error Response (e.g., Username taken):**
-  - **Code:** `400 Bad Request` / `409 Conflict` (depending on service logic)
-  - **Body:**
-    ```json
-    {
-      "success": false,
-      "message": "Error message",
-      "details": "Specific details if available"
-    }
-    ```
 
 ---
 
@@ -93,7 +81,7 @@ Verifies client credentials or JWT token.
 - **Headers:**
   - `Content-Type: application/json`
   - `x-api-key: <API_KEY>`
-- **Request Body:**
+- **Request Body (Credentials):**
   ```json
   {
     "username": "client_id",
@@ -101,7 +89,14 @@ Verifies client credentials or JWT token.
     "method": "credentials"
   }
   ```
-  _Note: `method` can be `"credentials"` or `"jwt"`. If `"jwt"`, password can be empty._
+- **Request Body (JWT):**
+  ```json
+  {
+    "username": "client_id",
+    "password": "",
+    "method": "jwt"
+  }
+  ```
 - **Success Response (Credentials):**
   - **Code:** `200 OK`
   - **Body:**
@@ -154,19 +149,17 @@ Checks if a user has permission to access a specific topic.
       "result": "allow"
     }
     ```
-    _Note: Result will be `"deny"` if access is not granted._
 
 ---
 
-## 5. Delete MQTT Client (Soft Delete)
+## 5. Delete MQTT Client
 
-Removes an MQTT client from the system (marks as deleted).
+Removes an MQTT client from the system.
 
 - **URL:** `/mqtt/{username}`
 - **Method:** `DELETE`
 - **Headers:**
-  - `Authorization: Bearer <API_KEY>`
-- **URL Params:** `username` (string)
+  - `x-api-key: <API_KEY>`
 - **Success Response:**
   - **Code:** `200 OK`
   - **Body:**
@@ -190,7 +183,6 @@ Retrieves a list of all registered MQTT clients with pagination support.
 - **Query Parameters:**
   - `page` (optional, default: `1`) - Page number
   - `page_size` (optional, default: `10`, max: `100`) - Number of items per page
-- **Example:** `GET /mqtt?page=1&page_size=10`
 - **Success Response:**
   - **Code:** `200 OK`
   - **Body:**
@@ -199,20 +191,7 @@ Retrieves a list of all registered MQTT clients with pagination support.
       "success": true,
       "message": "User MQTT list retrieved successfully",
       "data": {
-        "users": [
-          {
-            "id": 1,
-            "username": "client_id_1",
-            "is_superuser": false,
-            "is_deleted": false
-          },
-          {
-            "id": 2,
-            "username": "client_id_2",
-            "is_superuser": true,
-            "is_deleted": false
-          }
-        ],
+        "users": [...],
         "pagination": {
           "total": 50,
           "page": 1,
@@ -232,7 +211,7 @@ Retrieves a specific MQTT client by their ID.
 - **URL:** `/mqtt/{id}`
 - **Method:** `GET`
 - **Headers:**
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **URL Params:** `id` (integer) - The user ID
 - **Success Response:**
   - **Code:** `200 OK`
@@ -244,323 +223,429 @@ Retrieves a specific MQTT client by their ID.
       "data": {
         "id": 1,
         "username": "client_id",
-        "is_superuser": false,
-        "is_deleted": false
+        "is_superuser": false
       }
-    }
-    ```
-- **Error Response (Not Found):**
-  - **Code:** `404 Not Found`
-  - **Body:**
-    ```json
-    {
-      "success": false,
-      "message": "User not found"
     }
     ```
 
 ---
 
-## MQTT Admin API
+## MQTT RPC API (Backend Integration)
 
-The MQTT Admin API allows you to manage MQTT users through MQTT topics instead of HTTP. This is useful for administrative operations performed directly over MQTT.
+The MQTT RPC API is designed for backend-to-auth-service communication. It uses a request-reply pattern with per-requester reply topics.
 
-### MQTT Authentication
+### Overview
 
-To use the MQTT Admin API, your MQTT client must:
-1. Be authenticated as a **superuser** in the system
-2. Be subscribed to the appropriate response topics to receive operation results
-
-### Multi-Instance Support (Shared Subscriptions)
-
-For production deployments with multiple service instances, the API uses **shared subscriptions** to prevent race conditions:
-
-- **Format**: `$share/{group_id}/{topic}`
-- **Behavior**: Only one instance in the group receives each message
-- **Load Balancing**: Messages are distributed across instances
-- **Configuration**: Set `MQTT_USE_SHARED_SUB=true` (default)
-
-Example topics with shared subscription:
-- `$share/emqx_auth_service/admins/users/create`
-- `$share/emqx_auth_service/admins/users/delete`
-- `$share/emqx_auth_service/admins/users`
-- `$share/emqx_auth_service/admins/users/+`
+- **Requester**: Backend service (e.g., IoTNet backend)
+- **Responder**: EMQX Auth Service
+- **Pattern**: Request-Reply over MQTT
+- **QoS**: `1` (At least once)
+- **Retain**: `false` for all RPC responses
+- **Correlation**: Via `request_id` field
 
 ### Message Format
 
-All MQTT messages use JSON format with the following structure:
+#### Request Envelope
 
-**Request:**
+All RPC requests follow this envelope structure:
+
 ```json
 {
-  "request_id": "unique-uuid-here",
-  // ... operation-specific fields
+  "schema_version": 1,
+  "request_id": "uuid-here",
+  "reply_to": "iotnet/auth/replies/backend-instance-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  // Command-specific data fields follow
 }
 ```
 
-**Response:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | number | Yes | Protocol version (currently `1`) |
+| `request_id` | string | Yes | Unique correlation ID (UUID recommended) |
+| `reply_to` | string | Yes | Topic where response should be published |
+| `requested_by` | string | Yes | Identifier of the requesting service |
+| `timestamp` | number | Yes | Unix timestamp in milliseconds |
+| `target_user` | string | For tokens.issue | Target user for the operation (must match `requested_by` for token issuance) |
+
+#### Response Envelope
+
+All RPC responses follow this structure:
+
 ```json
 {
-  "request_id": "unique-uuid-here",
+  "schema_version": 1,
+  "request_id": "uuid-here",
   "success": true,
   "message": "Operation completed successfully",
+  "code": null,
   "data": { /* operation-specific data */ }
 }
 ```
 
-### Request Topics
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schema_version` | number | Yes | Protocol version (currently `1`) |
+| `request_id` | string | Yes | Echo of the request's `request_id` |
+| `success` | boolean | Yes | `true` for success, `false` for error |
+| `message` | string | Yes | Human-readable description |
+| `code` | string | No | Error code (only on failure) |
+| `data` | object | No | Operation-specific response data |
 
-| Topic | Method | Description |
-|-------|--------|-------------|
-| `admins/users/create` | PUBLISH | Create a new MQTT user |
-| `admins/users/delete` | PUBLISH | Delete an existing MQTT user |
-| `admins/users` | PUBLISH | List users with pagination |
-| `admins/users/{user_id}` | SUBSCRIBE | Get user by ID (subscribe to topic) |
+### Security Model
 
-### Response Topics
+1. **Allowed Requesters**: Only requesters in `MQTT_ADMIN_ALLOWED_REQUESTERS` environment variable can issue commands
+2. **Reply Topic Binding**: `reply_to` must exactly match `iotnet/auth/replies/{requested_by}` - prevents routing attacks
+3. **Token Issuance Protection**: For `tokens.issue`, `target_user` must match `requested_by` - prevents minting tokens for other users
+4. **Timestamp Validation**: Requests older than 5 minutes are rejected - prevents replay attacks
+5. **Broker ACLs**: Primary authorization is enforced via MQTT broker ACLs on `iotnet/auth/commands/*` topics
 
-| Topic | Description |
-|-------|-------------|
-| `admins/users/create/response` | Response for create operations |
-| `admins/users/delete/response` | Response for delete operations |
-| `admins/users/list/response` | Response for list operations |
-| `admins/users/detail/response` | Response for get by ID operations |
+### Error Codes
+
+| Code | HTTP Equivalent | Description |
+|------|----------------|-------------|
+| `USER_ALREADY_EXISTS` | 409 Conflict | Username already exists |
+| `USER_NOT_FOUND` | 404 Not Found | User does not exist |
+| `VALIDATION_ERROR` | 400 Bad Request | Request validation failed |
+| `JWT_ISSUE_FAILED` | 500 Internal Error | Failed to generate JWT token |
+| `INTERNAL_ERROR` | 500 Internal Error | Generic internal server error |
+| `UNAUTHORIZED_COMMAND` | 401 Unauthorized | Requester not authorized or target_user mismatch |
+
+### Commands
 
 ---
 
-### 1. Create User
+### 1. `users.create`
 
-Creates a new MQTT user in the system.
+Creates a new MQTT user.
 
-- **Request Topic:** `admins/users/create`
-- **Response Topic:** `admins/users/create/response`
-- **QoS:** `1` (At least once)
-- **Request Payload:**
-  ```json
-  {
-    "request_id": "req-123-abc",
-    "username": "new_user",
-    "password": "secure_password_123",
+- **Request Topic:** `iotnet/auth/commands/users.create`
+- **Reply Topic:** `iotnet/auth/replies/{requested_by}`
+- **QoS:** `1`
+- **Retain:** `false`
+
+#### Request Payload
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "reply_to": "iotnet/auth/replies/backend-prod-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001",
+  "password": "secure_password_123",
+  "is_superuser": false
+}
+```
+
+#### Success Response
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "success": true,
+  "message": "User created successfully",
+  "code": null,
+  "data": null
+}
+```
+
+---
+
+### 2. `users.delete`
+
+Deletes an existing MQTT user.
+
+- **Request Topic:** `iotnet/auth/commands/users.delete`
+- **Reply Topic:** `iotnet/auth/replies/{requested_by}`
+- **QoS:** `1`
+- **Retain:** `false`
+
+#### Request Payload
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440001",
+  "reply_to": "iotnet/auth/replies/backend-prod-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001"
+}
+```
+
+#### Success Response
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440001",
+  "success": true,
+  "message": "User deleted successfully",
+  "code": null,
+  "data": null
+}
+```
+
+---
+
+### 3. `users.get`
+
+Retrieves user metadata by username.
+
+- **Request Topic:** `iotnet/auth/commands/users.get`
+- **Reply Topic:** `iotnet/auth/replies/{requested_by}`
+- **QoS:** `1`
+- **Retain:** `false`
+
+#### Request Payload
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440002",
+  "reply_to": "iotnet/auth/replies/backend-prod-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001"
+}
+```
+
+#### Success Response
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440002",
+  "success": true,
+  "message": "User retrieved successfully",
+  "code": null,
+  "data": {
+    "id": 42,
+    "username": "device_001",
     "is_superuser": false
   }
-  ```
-- **Success Response:**
-  ```json
-  {
-    "request_id": "req-123-abc",
-    "success": true,
-    "message": "User created successfully",
-    "data": {
-      "id": 42,
-      "username": "new_user",
-      "is_superuser": false
-    }
-  }
-  ```
-- **Error Response (Username taken):**
-  ```json
-  {
-    "request_id": "req-123-abc",
-    "success": false,
-    "message": "Username already exists",
-    "data": null
-  }
-  ```
-- **Error Response (Validation error):**
-  ```json
-  {
-    "request_id": "req-123-abc",
-    "success": false,
-    "message": "Validation failed",
-    "data": {
-      "errors": ["Username must be at least 3 characters", "Password must be at least 8 characters"]
-    }
-  }
-  ```
+}
+```
 
 ---
 
-### 2. Delete User
+### 4. `tokens.issue`
 
-Deletes (soft delete) an existing MQTT user.
+Issues a JWT token for an existing user.
 
-- **Request Topic:** `admins/users/delete`
-- **Response Topic:** `admins/users/delete/response`
-- **QoS:** `1` (At least once)
-- **Request Payload:**
-  ```json
-  {
-    "request_id": "req-456-def",
-    "username": "user_to_delete"
+- **Request Topic:** `iotnet/auth/commands/tokens.issue`
+- **Reply Topic:** `iotnet/auth/replies/{requested_by}`
+- **QoS:** `1`
+- **Retain:** `false`
+
+#### Request Payload
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440003",
+  "reply_to": "iotnet/auth/replies/backend-prod-1",
+  "requested_by": "iotnet-backend",
+  "target_user": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001"
+}
+```
+
+**Note:** `target_user` must match `requested_by` for security. This prevents a backend from minting tokens for arbitrary users.
+
+#### Success Response
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440003",
+  "success": true,
+  "message": "Token issued successfully",
+  "code": null,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
-  ```
-- **Success Response:**
-  ```json
-  {
-    "request_id": "req-456-def",
-    "success": true,
-    "message": "User deleted successfully",
-    "data": null
-  }
-  ```
-- **Error Response (User not found):**
-  ```json
-  {
-    "request_id": "req-456-def",
-    "success": false,
-    "message": "User not found",
-    "data": null
-  }
-  ```
+}
+```
 
 ---
 
-### 3. List Users
+### 5. `tokens.verify`
 
-Retrieves a paginated list of MQTT users.
+Verifies a user's password.
 
-- **Request Topic:** `admins/users`
-- **Response Topic:** `admins/users/list/response`
-- **QoS:** `1` (At least once)
-- **Request Payload:**
-  ```json
-  {
-    "request_id": "req-789-ghi",
-    "page": 1,
-    "page_size": 10
+- **Request Topic:** `iotnet/auth/commands/tokens.verify`
+- **Reply Topic:** `iotnet/auth/replies/{requested_by}`
+- **QoS:** `1`
+- **Retain:** `false`
+
+#### Request Payload
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440004",
+  "reply_to": "iotnet/auth/replies/backend-prod-1",
+  "requested_by": "iotnet-backend",
+  "timestamp": 1234567890,
+  "username": "device_001",
+  "password": "secure_password_123"
+}
+```
+
+#### Success Response (Valid Password)
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440004",
+  "success": true,
+  "message": "Password verified successfully",
+  "code": null,
+  "data": {
+    "valid": true
   }
-  ```
-- **Success Response:**
-  ```json
-  {
-    "request_id": "req-789-ghi",
-    "success": true,
-    "message": "Users retrieved successfully",
-    "data": {
-      "users": [
-        {
-          "id": 1,
-          "username": "user_1",
-          "is_superuser": false,
-          "is_deleted": false
-        },
-        {
-          "id": 2,
-          "username": "user_2",
-          "is_superuser": true,
-          "is_deleted": false
-        }
-      ],
-      "pagination": {
-        "total": 50,
-        "page": 1,
-        "page_size": 10,
-        "total_pages": 5
-      }
-    }
+}
+```
+
+#### Success Response (Invalid Password)
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "550e8400-e29b-41d4-a716-446655440004",
+  "success": true,
+  "message": "Invalid password",
+  "code": null,
+  "data": {
+    "valid": false
   }
-  ```
-- **Query Parameters:**
-  - `page` (optional, default: `1`) - Page number
-  - `page_size` (optional, default: `10`, max: `100`) - Number of items per page
+}
+```
 
 ---
 
-### 4. Get User by ID
+### Example: Backend MQTT RPC Client (TypeScript)
 
-Retrieves a specific user by their ID.
+```typescript
+import * as mqtt from 'mqtt';
+import { v4 as uuidv4 } from 'uuid';
 
-- **Request Topic:** `admins/users/{user_id}` (e.g., `admins/users/42`)
-- **Response Topic:** `admins/users/detail/response`
-- **QoS:** `1` (At least once)
-- **Request Payload:**
-  ```json
-  {
-    "request_id": "req-000-jkl"
-  }
-  ```
-- **Success Response:**
-  ```json
-  {
-    "request_id": "req-000-jkl",
-    "success": true,
-    "message": "User retrieved successfully",
-    "data": {
-      "id": 42,
-      "username": "user_42",
-      "is_superuser": false,
-      "is_deleted": false
-    }
-  }
-  ```
-- **Error Response (User not found):**
-  ```json
-  {
-    "request_id": "req-000-jkl",
-    "success": false,
-    "message": "User not found",
-    "data": null
-  }
-  ```
-
----
-
-### MQTT Admin API - Error Codes
-
-| Error | Description |
-|-------|-------------|
-| `Unauthorized` | Client is not a superuser |
-| `Invalid Payload` | Request payload is malformed JSON |
-| `Validation Error` | Request data fails validation |
-| `Not Found` | Requested user does not exist |
-| `Conflict` | Resource conflict (e.g., username taken) |
-| `Internal Error` | Server-side error |
-
----
-
-### Example: MQTT Admin Client (JavaScript)
-
-```javascript
-const mqtt = require('mqtt');
-
-const client = mqtt.connect('mqtt://localhost:1883', {
-  username: 'admin_user',
-  password: 'admin_password',
-  clientId: 'admin_client_' + Date.now()
+const client = mqtt.connect('mqtts://broker.example.com:8883', {
+  clientId: 'backend-prod-1',
+  username: 'backend_user',
+  password: 'backend_password'
 });
+
+const REPLY_TOPIC = 'iotnet/auth/replies/backend-prod-1';
+const COMMAND_PREFIX = 'iotnet/auth/commands';
+
+// Pending requests tracking
+const pendingRequests = new Map<string, {
+  resolve: (value: any) => void;
+  reject: (reason: Error) => void;
+  timeoutId: NodeJS.Timeout;
+}>();
 
 client.on('connect', () => {
   console.log('Connected to MQTT broker');
-  
-  // Subscribe to response topics
-  client.subscribe('admins/users/+/response');
-  client.subscribe('admins/users/list/response');
-  client.subscribe('admins/users/detail/response');
-  
-  // Create a new user
-  const createRequest = {
-    request_id: 'create-' + Date.now(),
-    username: 'new_device_001',
-    password: 'SecurePass123!',
-    is_superuser: false
-  };
-  
-  client.publish('admins/users/create', JSON.stringify(createRequest), { qos: 1 });
-  
-  // List users with pagination
-  const listRequest = {
-    request_id: 'list-' + Date.now(),
-    page: 1,
-    page_size: 20
-  };
-  
-  client.publish('admins/users', JSON.stringify(listRequest), { qos: 1 });
+
+  // Subscribe to reply topic
+  client.subscribe(REPLY_TOPIC, { qos: 1 }, (err) => {
+    if (err) {
+      console.error('Failed to subscribe to reply topic:', err);
+    } else {
+      console.log('Subscribed to reply topic:', REPLY_TOPIC);
+    }
+  });
 });
 
 client.on('message', (topic, message) => {
-  const response = JSON.parse(message.toString());
-  console.log(`Received response on ${topic}:`, response);
+  if (topic !== REPLY_TOPIC) return;
+
+  try {
+    const response = JSON.parse(message.toString());
+    const pending = pendingRequests.get(response.request_id);
+
+    if (!pending) {
+      console.warn('Received response for unknown request:', response.request_id);
+      return;
+    }
+
+    clearTimeout(pending.timeoutId);
+    pendingRequests.delete(response.request_id);
+
+    if (response.success) {
+      pending.resolve(response);
+    } else {
+      pending.reject(new Error(`${response.code}: ${response.message}`));
+    }
+  } catch (error) {
+    console.error('Failed to parse response:', error);
+  }
 });
+
+async function sendRpcCommand<T>(command: string, data: any): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const requestId = uuidv4();
+    const topic = `${COMMAND_PREFIX}/${command}`;
+
+    const envelope = {
+      schema_version: 1,
+      request_id: requestId,
+      reply_to: REPLY_TOPIC,
+      requested_by: 'iotnet-backend',
+      timestamp: Date.now(),
+      ...data
+    };
+
+    // Add target_user for token operations
+    if (command === 'tokens.issue' || command === 'tokens.verify') {
+      envelope.target_user = data.username;
+    }
+
+    const timeoutId = setTimeout(() => {
+      pendingRequests.delete(requestId);
+      reject(new Error('Request timeout'));
+    }, 5000);
+
+    pendingRequests.set(requestId, { resolve, reject, timeoutId });
+
+    client.publish(topic, JSON.stringify(envelope), { qos: 1 }, (err) => {
+      if (err) {
+        clearTimeout(timeoutId);
+        pendingRequests.delete(requestId);
+        reject(err);
+      }
+    });
+  });
+}
+
+// Usage example
+async function createDeviceUser(deviceId: string, password: string) {
+  const response = await sendRpcCommand('users.create', {
+    username: deviceId,
+    password: password,
+    is_superuser: false
+  });
+
+  console.log('User created:', response);
+}
+
+async function getDeviceToken(deviceId: string) {
+  const response = await sendRpcCommand('tokens.issue', {
+    username: deviceId,
+    target_user: 'iotnet-backend'  // Must match requested_by
+  });
+
+  console.log('Token received:', response.data.token);
+  return response.data.token;
+}
 ```
 
 ---
@@ -577,13 +662,13 @@ client.on('message', (topic, message) => {
 | `SECRET_KEY`         | SHA256 hash for JWT signing        | Yes      | -           |
 | `API_KEY`            | API key for request authentication | Yes      | -           |
 | `LOG_LEVEL`          | Logging level (info, debug, warn)  | No       | `info`      |
-| `MQTT_ADMIN_ENABLED` | Enable MQTT Admin API              | No       | `false`     |
+| `MQTT_ADMIN_ENABLED` | Enable MQTT RPC API                | No       | `false`     |
 | `MQTT_BROKER_HOST`   | MQTT broker host                   | No       | `localhost` |
 | `MQTT_BROKER_PORT`   | MQTT broker port                   | No       | `1883`      |
 | `MQTT_USE_TLS`       | Use TLS for MQTT connection        | No       | `false`     |
 | `MQTT_ADMIN_USERNAME`| MQTT client username (superuser)   | No       | -           |
 | `MQTT_ADMIN_PASSWORD`| MQTT client password               | No       | -           |
-| `MQTT_USE_SHARED_SUB`| Enable shared subscriptions        | No       | `true`      |
+| `MQTT_ADMIN_ALLOWED_REQUESTERS` | Comma-separated list of allowed requesters | No | `iotnet-backend` |
 | `MQTT_PASS_ENCRYPTION_KEY` | AES-256 encryption key (64 hex chars) | Yes | -   |
 
 ---

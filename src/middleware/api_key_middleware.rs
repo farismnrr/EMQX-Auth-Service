@@ -1,11 +1,11 @@
 use crate::dtos::response_dto::ErrorResponseDTO;
 use actix_web::{
-    Error, HttpResponse,
     body::EitherBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     http::header,
+    Error, HttpResponse,
 };
-use futures_util::future::{LocalBoxFuture, Ready, ok};
+use futures_util::future::{ok, LocalBoxFuture, Ready};
 use log::debug;
 use std::env;
 

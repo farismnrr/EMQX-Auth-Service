@@ -1,19 +1,21 @@
 use crate::dtos::mqtt_dto::{AuthType, MqttLoginDTO};
-use crate::repositories::get_mqtt_by_username_repository::GetMqttByUsernameRepository;
+use crate::services::get_mqtt_credentials_service::GetMqttCredentialsService;
 use crate::services::service_error::{MqttServiceError, ValidationError};
-use crate::utils::encryption::decrypt_password;
-use crate::utils::jwt_sign::create_jwt;
+use crate::utils::jwt_sign_util::create_jwt;
 use log::debug;
 use std::sync::Arc;
 
 pub struct MqttLoginService {
-    repo: Arc<GetMqttByUsernameRepository>,
+    credentials_service: Arc<GetMqttCredentialsService>,
     secret_key: String,
 }
 
 impl MqttLoginService {
-    pub fn new(repo: Arc<GetMqttByUsernameRepository>, secret_key: String) -> Self {
-        Self { repo, secret_key }
+    pub fn new(credentials_service: Arc<GetMqttCredentialsService>, secret_key: String) -> Self {
+        Self {
+            credentials_service,
+            secret_key,
+        }
     }
 
     pub async fn login_with_credentials(
@@ -22,9 +24,13 @@ impl MqttLoginService {
     ) -> Result<(bool, String, bool), MqttServiceError> {
         self.mqtt_input_credentials_validation(&dto)?;
 
-        let mqtt = match self.repo.get_mqtt_by_username(&dto.username).await {
-            Ok(u) => u,
-            Err(_) => {
+        let mqtt = match self
+            .credentials_service
+            .get_mqtt_by_username(&dto.username)
+            .await?
+        {
+            Some(u) => u,
+            None => {
                 debug!(
                     "[Service | CheckMQTTActive] User MQTT not found: {}",
                     dto.username
@@ -35,10 +41,11 @@ impl MqttLoginService {
 
         match dto.method.unwrap() {
             AuthType::Credentials => {
-                let decrypted_stored = decrypt_password(&mqtt.password)
-                    .map_err(MqttServiceError::InternalError)?;
-                
-                let is_valid = dto.password == decrypted_stored;
+                let is_valid = self
+                    .credentials_service
+                    .verify_password(&dto.username, &dto.password)
+                    .await?;
+
                 if !is_valid {
                     debug!(
                         "[Service | CheckMQTTActive] Invalid credentials for user MQTT: {}",
