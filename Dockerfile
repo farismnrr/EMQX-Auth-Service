@@ -1,17 +1,14 @@
 # ============================================================
-# 🧩 EMQX Auth Service — Multi-Stage Dockerfile
+# EMQX Auth Service — Multi-Stage Dockerfile (AMD64)
 # ============================================================
 # Description:
-#   This Dockerfile builds and runs the Rust-based EMQX HTTP Auth Service
-#   designed for fast authentication and ACL checks with MySQL integration.
-#
-#   It uses Debian Bookworm in both stages to ensure glibc compatibility
-#   The image follows OCI labeling conventions for better visibility
-#   on registries like GHCR or Docker Hub.
+#   Rust-based EMQX HTTP Auth Service with multi-database support
+#   (SQLite, PostgreSQL, MySQL). Uses Debian Bookworm for glibc
+#   compatibility.
 # ============================================================
 
 # ------------------------------------------------------------
-# 🏗️ Stage 1 — Build Stage
+# Stage 1 — Build Stage
 # ------------------------------------------------------------
 FROM debian:bookworm-slim AS builder
 
@@ -34,9 +31,8 @@ COPY src ./src
 
 RUN cargo build --release
 
-
 # ------------------------------------------------------------
-# 🚀 Stage 2 — Runtime Stage
+# Stage 2 — Runtime Stage
 # ------------------------------------------------------------
 FROM debian:bookworm-slim
 

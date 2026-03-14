@@ -1,4 +1,69 @@
-rocksdb-data/
-target/
-.idea/
+# =====================
+# 🔐 Credentials & Secrets
+# =====================
 .env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# =====================
+# 🗄️ Database Files
+# =====================
+*.sqlite
+*.sqlite3
+*.db
+data/
+db/
+
+# =====================
+# 🦀 Rust Build Artifacts
+# =====================
+target/
+**/target/
+
+# =====================
+# 💻 IDE & Editor
+# =====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =====================
+# 🪵 Logs & Temp
+# =====================
+*.log
+logs/
+tmp/
+temp/
+
+# =====================
+# 📊 RocksDB
+# =====================
+rocksdb-data/
+
+# =====================
+# 🖼️ Screenshots & Images
+# =====================
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.ico
+!assets/
+!docs/*.png
+!docs/*.jpg
+!scripts/*.png
+
+# =====================
+# 🖥️ OS Files
+# =====================
+.DS_Store
+Thumbs.db

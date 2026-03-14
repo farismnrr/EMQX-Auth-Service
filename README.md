@@ -5,11 +5,11 @@ A high-performance authentication and authorization service for MQTT clients in 
 ## Features
 
 - MQTT client credential management (create, list, delete)
-- Client authentication with fast password hashing
+- Client authentication with fast password verification
 - JWT token generation for authenticated sessions
 - Access Control List (ACL) validation
 - **MQTT RPC API** - Backend-to-service communication via MQTT topics
-- MySQL persistence for fast authentication and ACL checks
+- SQLite persistence for fast authentication and ACL checks
 - RESTful API with API key validation
 - Structured error handling and logging
 
@@ -27,9 +27,10 @@ A high-performance authentication and authorization service for MQTT clients in 
 Create a `.env` file:
 
 ```bash
-DB_PATH=./rocksdb-data/your_db
+DB_PATH=./data/mqtt_auth.sqlite
 SECRET_KEY=<generate-with: make key>
 API_KEY=<generate-with: make key>
+MQTT_PASS_ENCRYPTION_KEY=<generate-with: openssl rand -hex 32>
 LOG_LEVEL=info
 ```
 
@@ -360,11 +361,7 @@ For complete MQTT RPC API documentation, see [api_documentation.md](api_document
 
 | Variable             | Description                        | Required | Default     |
 | -------------------- | ---------------------------------- | -------- | ----------- |
-| `MYSQL_HOST`         | MySQL server host                  | Yes      | -           |
-| `MYSQL_PORT`         | MySQL server port                  | Yes      | -           |
-| `MYSQL_DATABASE`     | MySQL database name                | Yes      | -           |
-| `MYSQL_USER`         | MySQL username                     | Yes      | -           |
-| `MYSQL_PASSWORD`     | MySQL password                     | Yes      | -           |
+| `DB_PATH`            | SQLite database file path          | No       | `mqtt_auth.sqlite` |
 | `SECRET_KEY`         | SHA256 hash for JWT signing        | Yes      | -           |
 | `API_KEY`            | API key for request authentication | Yes      | -           |
 | `LOG_LEVEL`          | Logging level (info, debug, warn)  | No       | `info`      |
@@ -376,6 +373,8 @@ For complete MQTT RPC API documentation, see [api_documentation.md](api_document
 | `MQTT_ADMIN_PASSWORD`| MQTT client password               | No       | -           |
 | `MQTT_ADMIN_ALLOWED_REQUESTERS` | Comma-separated list of allowed requesters | No | `iotnet-backend` |
 | `MQTT_PASS_ENCRYPTION_KEY` | AES-256 encryption key (64 hex chars) | Yes | -   |
+| `MQTT_TOPIC_AUTH_COMMAND_PREFIX` | MQTT RPC command topic prefix | No | `iotnet/auth/commands` |
+| `MQTT_TOPIC_AUTH_REPLY_PREFIX` | MQTT RPC reply topic prefix | No | `iotnet/auth/replies` |
 
 ## Make Commands
 

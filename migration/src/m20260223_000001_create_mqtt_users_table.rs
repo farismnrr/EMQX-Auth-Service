@@ -13,7 +13,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(MqttUsers::Id)
-                            .integer()
+                            .big_integer()
                             .not_null()
                             .auto_increment()
                             .primary_key(),
@@ -30,6 +30,18 @@ impl MigrationTrait for Migration {
                             .boolean()
                             .not_null()
                             .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(MqttUsers::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(MqttUsers::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
                     )
                     .to_owned(),
             )
@@ -50,4 +62,6 @@ enum MqttUsers {
     Username,
     Password,
     IsSuperuser,
+    CreatedAt,
+    UpdatedAt,
 }

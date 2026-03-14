@@ -1,3 +1,5 @@
+//! Shared utilities
+
 pub mod encryption_util;
-pub mod jwt_sign_util;
-pub mod mqtt_rpc_util;
+
+pub use encryption_util::{hex_to_key32, EncryptionError};

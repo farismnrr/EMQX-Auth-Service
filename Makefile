@@ -3,7 +3,7 @@
 COMPOSE := docker compose
 COMPOSE_DEV := docker compose -f docker-compose-dev.yml
 
-.PHONY: help dev dev\ stop dev\ logs dev\ restart build push key clean start-mysql-dev stop-mysql-dev kill emqx emqx\ setup emqx\ logs emqx\ restart prod prod\ up prod\ down prod\ logs prod\ restart
+.PHONY: help dev dev\ stop dev\ logs dev\ restart build push key clean kill emqx emqx\ setup emqx\ logs emqx\ restart prod prod\ up prod\ down prod\ logs prod\ restart
 
 .DEFAULT_GOAL := help
 
@@ -11,7 +11,7 @@ help:
 	@echo "EMQX Auth Service - Available Commands:"
 	@echo ""
 	@echo "  --- LOCAL DEV ---"
-	@echo "  make dev              - Start full dev environment (EMQX + Auth Service + MySQL)"
+	@echo "  make dev              - Start auth service only with hot reload (auto cleanup on Ctrl+C)"
 	@echo "  make dev stop         - Stop all dev services"
 	@echo "  make dev logs         - View logs from all services"
 	@echo "  make dev restart      - Restart all dev services"
@@ -31,10 +31,6 @@ help:
 	@echo "  make prod logs        - View production logs"
 	@echo "  make prod restart     - Restart production services"
 	@echo ""
-	@echo "  --- DATABASE ---"
-	@echo "  make start-mysql-dev  - Start dev MySQL container"
-	@echo "  make stop-mysql-dev   - Stop dev MySQL container"
-	@echo ""
 	@echo "  --- DOCKER & DEPLOY ---"
 	@echo "  make build            - Build Docker plugin image"
 	@echo "  make push             - Push local image to GHCR"
@@ -45,34 +41,18 @@ help:
 # Development Environment
 # ==============================================================================
 
-## Start full development environment (EMQX + Auth Service + MySQL)
+## Start auth service only with hot reload (auto cleanup on Ctrl+C)
 dev:
-	@echo "🚀 Starting development environment..."
-	@echo ""
-	@echo "📦 Starting MySQL..."
-	@$(COMPOSE_DEV) up -d mysql --wait
-	@sleep 3
-	@echo ""
-	@echo "📦 Starting EMQX Broker..."
-	@$(COMPOSE_DEV) up -d emqx
-	@echo ""
-	@echo "⏳ Waiting for EMQX to initialize..."
-	@sleep 15
-	@echo ""
-	@echo "🔧 Running EMQX auto-configuration..."
-	@bash scripts/emqx-setup.sh
-	@echo ""
-	@echo "⏳ Waiting for Auth Service to start..."
-	@sleep 5
-	@echo ""
-	@echo "🚀 Starting Auth Service with hot reload..."
-	@cargo watch -x run
+	@bash scripts/dev.sh
 
 ## Stop all development services
 dev\ stop:
 	@echo "🛑 Stopping all development services..."
-	@pkill -f "cargo.*run" 2>/dev/null || true
-	@$(COMPOSE_DEV) down
+	@pkill -9 -f "target/debug/emqx_auth" 2>/dev/null || true
+	@pkill -9 -f "cargo.*run" 2>/dev/null || true
+	@docker stop emqx-auth-service 2>/dev/null || true
+	@docker rm -f emqx-auth-service 2>/dev/null || true
+	@$(COMPOSE_DEV) down 2>/dev/null || true
 	@echo "✅ All services stopped"
 
 ## View logs from all services
@@ -112,20 +92,6 @@ emqx\ restart:
 	@echo "✅ EMQX restarted"
 
 # ==============================================================================
-# Database Management
-# ==============================================================================
-
-## Start dev MySQL container
-start-mysql-dev:
-	@$(COMPOSE_DEV) up -d mysql --wait
-	@echo "✅ MySQL started"
-
-## Stop dev MySQL container
-stop-mysql-dev:
-	@$(COMPOSE_DEV) down mysql
-	@echo "✅ MySQL stopped"
-
-# ==============================================================================
 # Utilities
 # ==============================================================================
 
@@ -144,23 +110,12 @@ clean:
 ## Kill process running on port 5500
 kill:
 	@echo "🔪 Killing processes on port 5500..."
-	@lsof -ti:5500 | xargs -r kill -9 || echo "✅ No process running on port 5500"
-
-## Start Database for development (MySQL or PostgreSQL)
-start-db:
-	@DB_TYPE=$$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d '=' -f2- | tr -d '"' | tr -d "'"); \
-	DB_TYPE=$${DB_TYPE:-mysql}; \
-	if [ "$$DB_TYPE" = "postgres" ]; then \
-		echo "🐘 Starting PostgreSQL..."; \
-		$(COMPOSE_DEV) up -d --wait --remove-orphans postgres; \
-	else \
-		echo "🐬 Starting MySQL..."; \
-		$(COMPOSE_DEV) up -d --wait --remove-orphans mysql; \
-	fi
-
-## Stop Database for development
-stop-db:
-	$(COMPOSE_DEV) down -v
+	@lsof -ti:5500 | xargs -r kill -9 || true
+	@pkill -9 -f "target/debug/emqx_auth" 2>/dev/null || true
+	@pkill -9 -f "cargo.*run" 2>/dev/null || true
+	@docker stop emqx-auth-service 2>/dev/null || true
+	@docker rm -f emqx-auth-service 2>/dev/null || true
+	@echo "✅ Cleanup complete"
 
 # ==============================================================================
 # MQTT User Management (Classic API)

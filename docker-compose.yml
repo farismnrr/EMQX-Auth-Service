@@ -39,55 +39,38 @@ services:
       - "5500:5500"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - iotnet-dev
+    user: "0:0"
+    volumes:
+      - emqx_auth_data:/app/data
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SECRET_KEY: ${SECRET_KEY}
       API_KEY: ${API_KEY}
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
-      MYSQL_USER: ${MYSQL_USER:-db_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-db_password}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-emqx_auth}
+      DB_PATH: /app/data/mqtt_auth.sqlite
       MQTT_ADMIN_ENABLED: "true"
       MQTT_BROKER_HOST: "host.docker.internal"
       MQTT_BROKER_PORT: "1883"
       MQTT_USE_TLS: "false"
       MQTT_USE_SHARED_SUB: "true"
       MQTT_PASS_ENCRYPTION_KEY: ${MQTT_PASS_ENCRYPTION_KEY}
-    depends_on:
-      mysql:
-        condition: service_healthy
+      # OpenTelemetry
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-emqx-auth-service}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5500/"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:5500/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 40s
-
-  ##==========================================================================
-  ## MySQL Database
-  ##==========================================================================
-  mysql:
-    image: mysql:8.0
-    container_name: emqx-auth-mysql
-    restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-emqx_auth}
-      MYSQL_USER: ${MYSQL_USER:-db_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-db_password}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      start_period: 60s
 
 volumes:
-  mysql_data:
+  emqx_auth_data:
   emqx_data:
   emqx_logs:
+
+networks:
+  iotnet-dev:
+    external: true
+    name: iotnet-dev
