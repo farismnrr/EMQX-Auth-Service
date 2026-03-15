@@ -42,6 +42,7 @@ pub struct EmqxAuthState {
         (status = 200, description = "Authentication denied (user not found or invalid password)", body = EmqxAuthResponse,
             example = json!({ "result": "deny" })),
     ),
+    security(("api_key" = []))
 )]
 pub async fn emqx_auth_handler(
     state: web::Data<EmqxAuthState>,

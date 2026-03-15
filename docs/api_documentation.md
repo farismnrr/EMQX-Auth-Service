@@ -236,7 +236,7 @@ EMQX HTTP authentication endpoint. Returns result in EMQX native format.
 
 - **URL:** `/emqx/auth`
 - **Method:** `POST`
-- **Authentication:** None (called by EMQX broker)
+- **Authentication:** Required (`x-api-key`)
 - **Request Body:**
   ```json
   {
@@ -262,6 +262,7 @@ EMQX HTTP authentication endpoint. Returns result in EMQX native format.
 ```bash
 curl -X POST http://localhost:5500/emqx/auth \
   -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
   -d '{"username":"device_001","password":"secure_password"}'
 ```
 
@@ -273,7 +274,7 @@ EMQX HTTP authorization (ACL) endpoint. Returns result in EMQX native format.
 
 - **URL:** `/emqx/acl`
 - **Method:** `POST`
-- **Authentication:** None (called by EMQX broker)
+- **Authentication:** Required (`x-api-key`)
 - **Request Body:**
   ```json
   {
@@ -299,6 +300,7 @@ EMQX HTTP authorization (ACL) endpoint. Returns result in EMQX native format.
 ```bash
 curl -X POST http://localhost:5500/emqx/acl \
   -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
   -d '{"username":"device_001","topic":"sensor/data","action":"publish"}'
 ```
 
@@ -381,6 +383,7 @@ curl -X POST http://localhost:5500/emqx/acl \
   "properties": {
     "id": { "type": "integer", "format": "int64" },
     "username": { "type": "string" },
+    "password": { "type": ["string", "null"] },
     "is_superuser": { "type": "boolean" }
   }
 }

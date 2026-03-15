@@ -45,6 +45,7 @@ pub struct EmqxAclState {
         (status = 200, description = "Access denied (user not found or topic not permitted)", body = EmqxAclResponse,
             example = json!({ "result": "deny" })),
     ),
+    security(("api_key" = []))
 )]
 pub async fn emqx_acl_handler(
     state: web::Data<EmqxAclState>,
