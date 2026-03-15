@@ -7,8 +7,13 @@
 
 # Configuration
 BASE_URL="${AUTH_SERVICE_URL:-http://localhost:5500}"
-API_KEY="${API_KEY:-<REDACTED_API_KEY>}"
+API_KEY="${API_KEY}"
 TEST_PREFIX="e2e_test_$(date +%s)"
+
+if [ -z "$API_KEY" ]; then
+    echo -e "${RED}[ERROR]${NC} API_KEY environment variable is not set"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'

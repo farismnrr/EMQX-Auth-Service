@@ -1,7 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-API_KEY="<REDACTED_API_KEY>"
+# Configuration
+API_KEY="${API_KEY:-}"
+if [ -z "$API_KEY" ]; then
+  echo "Error: API_KEY environment variable is not set"
+  exit 1
+fi
+
 REQUESTED_BY="iotnet-backend"
 REQUEST_ID=$(cat /proc/sys/kernel/random/uuid)
 TIMESTAMP=$(date +%s%3N)
