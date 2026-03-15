@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 use crate::application::{CreateUserUseCase, ErrorResponse, SuccessResponse, SuccessResponseJson};
 use crate::infrastructure::{EncryptionAdapter, MqttUserRepositoryImpl};
+use crate::utils::map_internal_error;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateUserRequest {
@@ -60,7 +61,7 @@ pub async fn create_user_handler(
             } else if msg.contains("Validation") {
                 HttpResponse::BadRequest().json(ErrorResponse::new(msg))
             } else {
-                HttpResponse::InternalServerError().json(ErrorResponse::new(msg))
+                map_internal_error(e, "create_user")
             }
         }
     }

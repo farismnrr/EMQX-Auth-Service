@@ -8,7 +8,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::application::AuthenticateUserUseCase;
-use crate::infrastructure::{JwtAdapter, MqttUserRepositoryImpl, AppMetrics};
+use crate::infrastructure::{JwtAdapter, MqttUserRepositoryImpl, AppMetrics, EncryptionAdapter};
 
 /// EMQX authentication request
 #[derive(Debug, Deserialize, ToSchema)]
@@ -26,7 +26,7 @@ pub struct EmqxAuthResponse {
 }
 
 pub struct EmqxAuthState {
-    pub use_case: AuthenticateUserUseCase<MqttUserRepositoryImpl, JwtAdapter>,
+    pub use_case: AuthenticateUserUseCase<MqttUserRepositoryImpl, JwtAdapter, EncryptionAdapter>,
     pub metrics: AppMetrics,
 }
 

@@ -2,3 +2,4 @@
 
 pub mod auth_handler;
 pub mod acl_handler;
+pub mod login_handler;

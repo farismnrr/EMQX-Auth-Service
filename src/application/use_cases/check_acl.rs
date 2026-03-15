@@ -29,11 +29,12 @@ impl<R: MqttUserRepository> CheckAclUseCase<R> {
             .ok_or_else(|| CheckAclError::UserNotFound(username.to_string()))?;
 
         // ACL logic: superusers have access to everything
-        // Regular users can access topics containing their username
+        // Regular users can access topics starting with users/{username}/
+        let user_prefix = format!("users/{}/", user.username);
         let allowed = if user.is_superuser() {
             true
         } else {
-            topic.contains(&user.username)
+            topic.starts_with(&user_prefix)
         };
 
         Ok(allowed)

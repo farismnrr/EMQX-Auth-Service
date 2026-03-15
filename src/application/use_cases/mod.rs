@@ -6,10 +6,12 @@ pub mod create_user;
 pub mod delete_user;
 pub mod get_user;
 pub mod list_users;
+pub mod issue_token;
 
-pub use authenticate_user::AuthenticateUserUseCase;
+pub use authenticate_user::{AuthenticateUserUseCase, AuthenticateUserError};
 pub use check_acl::CheckAclUseCase;
-pub use create_user::CreateUserUseCase;
-pub use delete_user::DeleteUserUseCase;
-pub use get_user::GetUserUseCase;
-pub use list_users::ListUsersUseCase;
+pub use create_user::{CreateUserUseCase, CreateUserError};
+pub use delete_user::{DeleteUserUseCase, DeleteUserError};
+pub use get_user::{GetUserUseCase, GetUserError};
+pub use list_users::{ListUsersUseCase, ListUsersError};
+pub use issue_token::{IssueTokenUseCase, IssueTokenError};

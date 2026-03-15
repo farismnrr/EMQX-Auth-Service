@@ -187,11 +187,19 @@ mqtt-create-superuser:
 
 ## Build project and Docker plugin
 build:
-	@bash autobuild.sh
+	@bash scripts/autobuild.sh
 
-## Push to GHCR (no rebuild, just push local image)
+## Push to GHCR (AMD64 + ARM64)
 push:
-	@bash autobuild.sh --push
+	@bash scripts/autobuild.sh --push --platform linux/amd64,linux/arm64
+
+## Push AMD64 only to GHCR
+push-amd:
+	@bash scripts/autobuild.sh --push --platform linux/amd64
+
+## Push ARM only (ARM64) to GHCR
+push-arm:
+	@bash scripts/autobuild.sh --push --platform linux/arm64
 
 # ==============================================================================
 # Production Environment

@@ -1,61 +1,86 @@
 #!/bin/bash
 #===============================================================================
-# EMQX Auto-Configuration Script
-# Runs from HOST, not inside container
+# EMQX Ultra-Robust Auto-Configuration Script
+# (Self-Handling Dashboard & Restricted Listeners)
 #===============================================================================
 
-EMQX_DASHBOARD_URL="${EMQX_DASHBOARD_URL:-http://localhost:18083}"
-EMQX_ADMIN_USER="${EMQX_ADMIN_USER:-admin}"
-EMQX_ADMIN_PASS="${EMQX_ADMIN_PASS:-public123}"
-AUTH_SERVICE_URL="${AUTH_SERVICE_URL:-http://localhost:5500}"
-API_KEY="${API_KEY}"
-
-if [ -z "$API_KEY" ]; then
-    echo "[EMQX Setup] ERROR: API_KEY is not set. Please check your .env file."
-    exit 1
+# Load .env if it exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
 fi
 
-EMQX_CONTAINER_NAME="${EMQX_CONTAINER_NAME:-dev-emqx}"
+EMQX_DASHBOARD_URL="http://localhost:18083"
+EMQX_ADMIN_USER="${EMQX_ADMIN_USER:-admin}"
+EMQX_CONTAINER_NAME="${EMQX_CONTAINER_NAME:-emqx-broker}"
+# IMPORTANT: Use internal Docker port 5500 for EMQX-to-AuthService communication
+AUTH_SERVICE_URL="${AUTH_SERVICE_URL:-http://emqx-auth-service:5500}"
+API_KEY="${API_KEY}"
 
-log() { echo "[EMQX Setup] $(date '+%Y-%m-%d %H:%M:%S') - $1"; }
+log() { echo -e "[\033[0;34mEMQX Setup\033[0m] $(date '+%Y-%m-%d %H:%M:%S') - $1"; }
+warn() { echo -e "[\033[0;33mWARN\033[0m] $1"; }
+error() { echo -e "[\033[0;31mERROR\033[0m] $1"; exit 1; }
 
 log "Starting EMQX auto-configuration..."
 
-# Wait for EMQX
-log "Waiting for EMQX to be ready..."
-for i in {1..15}; do
-    if docker exec "$EMQX_CONTAINER_NAME" emqx_ctl status 2>&1 | grep -q "is started"; then
-        log "EMQX is running"
-        break
-    fi
-    if [ $i -eq 15 ]; then
-        log "ERROR: EMQX failed to start in time"
-        exit 1
-    fi
-    sleep 3
+# 1. Wait for EMQX Node
+log "Waiting for EMQX node to be responsive..."
+until docker exec "$EMQX_CONTAINER_NAME" emqx_ctl status 2>&1 | grep -q "is started"; do
+    sleep 2
 done
 
-sleep 2
+# 2. Handle Dashboard Lifecycle (Full CLI approach)
+log "Ensuring Dashboard API is available for configuration..."
+if ! curl -s "$EMQX_DASHBOARD_URL" > /dev/null; then
+    log "Dashboard is disabled. Enabling it temporarily on port 18083..."
+    # Using temp file inside container to load config string
+    docker exec "$EMQX_CONTAINER_NAME" sh -c "echo 'dashboard.listeners.http.bind = 18083' > /tmp/setup_dash.conf"
+    docker exec "$EMQX_CONTAINER_NAME" emqx_ctl conf load /tmp/setup_dash.conf > /dev/null
+    DASHBOARD_TEMPORARY=true
+    sleep 5 # Wait for API to warm up
+else
+    DASHBOARD_TEMPORARY=false
+    log "Dashboard already accessible."
+fi
 
-# Get token
-log "Getting dashboard API token..."
-# Ensure admin user exists or update password
-docker exec "$EMQX_CONTAINER_NAME" emqx_ctl admins passwd "$EMQX_ADMIN_USER" "$EMQX_ADMIN_PASS" 2>/dev/null || true
+# 3. Authenticate & Get Token
+log "Authenticating with Dashboard API..."
+# Try credentials from env, then default 'public'
+PASSWORDS=("${MQTT_ADMIN_PASSWORD}" "public" "public123")
+TOKEN=""
 
-TOKEN=$(curl -s -X POST "${EMQX_DASHBOARD_URL}/api/v5/login" \
-    -H "Content-Type: application/json" \
-    -d "{\"username\":\"${EMQX_ADMIN_USER}\",\"password\":\"${EMQX_ADMIN_PASS}\"}" \
-    | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+for PASS in "${PASSWORDS[@]}"; do
+    [ -z "$PASS" ] && continue
+    RESPONSE=$(curl -s -X POST "${EMQX_DASHBOARD_URL}/api/v5/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"${EMQX_ADMIN_USER}\",\"password\":\"${PASS}\"}")
+    
+    TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+    if [ -n "$TOKEN" ]; then
+        log "Authenticated successfully."
+        break
+    fi
+done
 
 if [ -z "$TOKEN" ]; then
-    log "ERROR: Failed to get dashboard token"
-    exit 1
+    warn "Authentication failed. Attempting to sync admin password from .env..."
+    docker exec "$EMQX_CONTAINER_NAME" emqx_ctl admins passwd "$EMQX_ADMIN_USER" "${MQTT_ADMIN_PASSWORD}"
+    sleep 5
+    RESPONSE=$(curl -s -X POST "${EMQX_DASHBOARD_URL}/api/v5/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"${EMQX_ADMIN_USER}\",\"password\":\"${MQTT_ADMIN_PASSWORD}\"}")
+    TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 fi
-log "Dashboard token obtained"
 
-# Configure authentication
-log "Configuring HTTP authentication..."
-# First check if it already exists
+[ -z "$TOKEN" ] && error "Final authentication attempt failed. Check credentials."
+
+# 4. Restrict Listeners (Only 1883 and 8083)
+log "Cleaning up unnecessary listeners (SSL 8883, WSS 8084)..."
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/ssl:default/enable/false" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/wss:default/enable/false" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+log "Internal listeners restricted."
+
+# 5. Configure HTTP Authentication
+log "Configuring HTTP Authentication..."
 AUTH_LIST=$(curl -s -X GET "${EMQX_DASHBOARD_URL}/api/v5/authentication" -H "Authorization: Bearer ${TOKEN}")
 if echo "$AUTH_LIST" | grep -q "password_based:http"; then
     log "Authentication already configured, skipping..."
@@ -67,24 +92,22 @@ else
             \"mechanism\": \"password_based\",
             \"backend\": \"http\",
             \"enable\": true,
-            \"url\": \"${AUTH_SERVICE_URL}/mqtt/check\",
+            \"url\": \"${AUTH_SERVICE_URL}/emqx/auth\",
             \"method\": \"post\",
             \"headers\": {
-                \"Authorization\": \"${API_KEY}\",
+                \"x-api-key\": \"${API_KEY}\",
                 \"Content-Type\": \"application/json\"
             },
             \"body\": {
                 \"username\": \"\${username}\",
-                \"password\": \"\${password}\",
-                \"method\": \"credentials\"
+                \"password\": \"\${password}\"
             }
         }" > /dev/null
-    log "Authentication configured"
+    log "Authentication configured ✅"
 fi
 
-# Configure authorization
-log "Configuring HTTP authorization (ACL)..."
-# First check if it already exists
+# 6. Configure HTTP Authorization (ACL)
+log "Configuring HTTP Authorization (ACL)..."
 AUTHZ_LIST=$(curl -s -X GET "${EMQX_DASHBOARD_URL}/api/v5/authorization/sources" -H "Authorization: Bearer ${TOKEN}")
 if echo "$AUTHZ_LIST" | grep -q "http"; then
     log "Authorization already configured, skipping..."
@@ -96,9 +119,9 @@ else
             \"type\": \"http\",
             \"enable\": true,
             \"method\": \"post\",
-            \"url\": \"${AUTH_SERVICE_URL}/mqtt/acl\",
+            \"url\": \"${AUTH_SERVICE_URL}/emqx/acl\",
             \"headers\": {
-                \"Authorization\": \"${API_KEY}\",
+                \"x-api-key\": \"${API_KEY}\",
                 \"Content-Type\": \"application/json\"
             },
             \"body\": {
@@ -108,19 +131,16 @@ else
                 \"action\": \"\${action}\"
             }
         }" > /dev/null
-    log "Authorization configured"
+    log "Authorization configured ✅"
 fi
 
-# Disable dashboard (optional, keep enabled for dev if needed, but here we follow original script)
-# log "Disabling dashboard..."
-# curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/configs/dashboard.listeners.http" \
-#     -H "Content-Type: application/json" \
-#     -H "Authorization: Bearer ${TOKEN}" \
-#     -d '{"bind": 0}' > /dev/null 2>&1 || true
+# 7. Final Security Cleanup (Disable Dashboard)
+log "Disabling Dashboard listener (Full CLI mode)..."
+docker exec "$EMQX_CONTAINER_NAME" sh -c "echo 'dashboard.listeners.http.bind = 0' > /tmp/setup_dash_off.conf"
+docker exec "$EMQX_CONTAINER_NAME" emqx_ctl conf load /tmp/setup_dash_off.conf > /dev/null
 
 log "============================================"
 log "EMQX auto-configuration completed!"
-log "Authentication: ${AUTH_SERVICE_URL}/mqtt/check"
-log "Authorization:  ${AUTH_SERVICE_URL}/mqtt/acl"
-log "Dashboard:      ${EMQX_DASHBOARD_URL}"
+log "Listeners Active: 1883 (MQTT), 8083 (WS)"
+log "Dashboard Status: DISABLED"
 log "============================================"

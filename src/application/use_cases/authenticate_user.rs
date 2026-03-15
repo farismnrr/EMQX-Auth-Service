@@ -1,6 +1,6 @@
 //! Authenticate User Use Case
 
-use crate::application::ports::JwtPort;
+use crate::application::ports::{JwtPort, EncryptionPort};
 use crate::domain::MqttUserRepository;
 use thiserror::Error;
 
@@ -14,19 +14,23 @@ pub enum AuthenticateUserError {
     Repository(#[from] crate::domain::RepositoryError),
     #[error("JWT error: {0}")]
     Jwt(String),
+    #[error("Encryption error: {0}")]
+    Encryption(String),
 }
 
 /// Use case for authenticating a user
-pub struct AuthenticateUserUseCase<R, J> {
+pub struct AuthenticateUserUseCase<R, J, E> {
     repository: R,
     jwt_port: J,
+    encryption: E,
 }
 
-impl<R: MqttUserRepository, J: JwtPort> AuthenticateUserUseCase<R, J> {
-    pub fn new(repository: R, jwt_port: J) -> Self {
+impl<R: MqttUserRepository, J: JwtPort, E: EncryptionPort> AuthenticateUserUseCase<R, J, E> {
+    pub fn new(repository: R, jwt_port: J, encryption: E) -> Self {
         Self {
             repository,
             jwt_port,
+            encryption,
         }
     }
 
@@ -42,7 +46,10 @@ impl<R: MqttUserRepository, J: JwtPort> AuthenticateUserUseCase<R, J> {
             .await?
             .ok_or_else(|| AuthenticateUserError::UserNotFound(username.to_string()))?;
 
-        if !user.verify_password(password) {
+        let is_valid = self.encryption.verify_password(password, &user.password_ciphertext)
+            .map_err(|e| AuthenticateUserError::Encryption(e.to_string()))?;
+
+        if !is_valid {
             return Err(AuthenticateUserError::InvalidCredentials);
         }
 
@@ -61,7 +68,10 @@ impl<R: MqttUserRepository, J: JwtPort> AuthenticateUserUseCase<R, J> {
             .await?
             .ok_or_else(|| AuthenticateUserError::UserNotFound(username.to_string()))?;
 
-        if !user.verify_password(password) {
+        let is_valid = self.encryption.verify_password(password, &user.password_ciphertext)
+            .map_err(|e| AuthenticateUserError::Encryption(e.to_string()))?;
+
+        if !is_valid {
             return Err(AuthenticateUserError::InvalidCredentials);
         }
 

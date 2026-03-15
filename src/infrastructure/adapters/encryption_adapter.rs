@@ -1,30 +1,34 @@
-//! Encryption adapter - bcrypt implementation
+//! Encryption adapter - AES-256-GCM implementation
 
 use crate::application::ports::encryption_port::{EncryptionError, EncryptionPort};
+use crate::utils::encryption_util;
 
-/// Bcrypt encryption adapter
+/// AES-256-GCM encryption adapter
 #[derive(Clone)]
-pub struct EncryptionAdapter;
-
-impl EncryptionAdapter {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct EncryptionAdapter {
+    key: [u8; 32],
 }
 
-impl Default for EncryptionAdapter {
-    fn default() -> Self {
-        Self::new()
+impl EncryptionAdapter {
+    /// Create a new EncryptionAdapter with the provided 32-byte key
+    pub fn new(key: [u8; 32]) -> Self {
+        Self { key }
     }
 }
 
 impl EncryptionPort for EncryptionAdapter {
-    fn hash_password(&self, password: &str) -> Result<String, EncryptionError> {
-        bcrypt::hash(password, bcrypt::DEFAULT_COST)
+    fn encrypt_password(&self, password: &str) -> Result<String, EncryptionError> {
+        encryption_util::aes256_gcm_encrypt(password, &self.key)
             .map_err(|e| EncryptionError::HashError(e.to_string()))
     }
 
-    fn verify_password(&self, password: &str, hash: &str) -> Result<bool, EncryptionError> {
-        Ok(bcrypt::verify(password, hash).unwrap_or(false))
+    fn decrypt_password(&self, encrypted_password: &str) -> Result<String, EncryptionError> {
+        encryption_util::aes256_gcm_decrypt(encrypted_password, &self.key)
+            .map_err(|e| EncryptionError::HashError(e.to_string()))
+    }
+
+    fn verify_password(&self, password: &str, encrypted_password: &str) -> Result<bool, EncryptionError> {
+        let decrypted = self.decrypt_password(encrypted_password)?;
+        Ok(password == decrypted)
     }
 }

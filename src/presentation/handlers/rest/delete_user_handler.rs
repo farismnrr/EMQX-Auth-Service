@@ -4,6 +4,7 @@ use actix_web::{web, HttpResponse};
 
 use crate::application::{DeleteUserUseCase, ErrorResponse, SuccessResponse, SuccessResponseJson};
 use crate::infrastructure::MqttUserRepositoryImpl;
+use crate::utils::map_internal_error;
 
 pub struct DeleteUserAppState {
     pub use_case: DeleteUserUseCase<MqttUserRepositoryImpl>,
@@ -41,7 +42,7 @@ pub async fn delete_user_handler(
             if msg.contains("not found") {
                 HttpResponse::NotFound().json(ErrorResponse::new(msg))
             } else {
-                HttpResponse::InternalServerError().json(ErrorResponse::new(msg))
+                map_internal_error(e, "delete_user")
             }
         }
     }

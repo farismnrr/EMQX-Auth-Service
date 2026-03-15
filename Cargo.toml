@@ -41,7 +41,6 @@ migration = { path = "migration" }
 rumqttc = "0.24"
 utoipa = { version = "5.4.0", features = ["actix_extras", "chrono"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
-bcrypt = "0.16"
 
 # OpenTelemetry
 opentelemetry = "0.31"

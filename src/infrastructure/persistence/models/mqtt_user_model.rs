@@ -31,7 +31,7 @@ impl From<Model> for crate::domain::MqttUser {
         crate::domain::MqttUser {
             id: model.id,
             username: model.username,
-            password_hash: model.password,
+            password_ciphertext: model.password,
             is_superuser: model.is_superuser,
             created_at: model.created_at,
             updated_at: model.updated_at,

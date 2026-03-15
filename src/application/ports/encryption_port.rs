@@ -10,12 +10,13 @@ pub enum EncryptionError {
 }
 
 /// Port for encryption operations
-///
-/// Follows Dependency Inversion Principle - infrastructure provides implementation
 pub trait EncryptionPort: Send + Sync {
-    /// Hash a password
-    fn hash_password(&self, password: &str) -> Result<String, EncryptionError>;
+    /// Encrypt a password
+    fn encrypt_password(&self, password: &str) -> Result<String, EncryptionError>;
 
-    /// Verify a password against a hash
-    fn verify_password(&self, password: &str, hash: &str) -> Result<bool, EncryptionError>;
+    /// Decrypt a password
+    fn decrypt_password(&self, encrypted_password: &str) -> Result<String, EncryptionError>;
+
+    /// Verify a password against an encrypted password
+    fn verify_password(&self, password: &str, encrypted_password: &str) -> Result<bool, EncryptionError>;
 }

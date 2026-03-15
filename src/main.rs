@@ -3,17 +3,17 @@
 mod application;
 mod config;
 mod domain;
-mod entities;
 mod infrastructure;
 mod presentation;
 mod utils;
 
 use actix_web::{web, HttpResponse, HttpServer, Responder};
 use config::AppConfig;
-use infrastructure::{close_db, init_db, EncryptionAdapter, JwtAdapter, MqttUserRepositoryImpl, AppMetrics, MetricsMiddleware};
+use infrastructure::{close_db, init_db, EncryptionAdapter, JwtAdapter, MqttUserRepositoryImpl, AppMetrics};
+use presentation::{MetricsMiddleware, ApiKeyMiddleware};
 use infrastructure::telemetry::{init_opentelemetry_traces, shutdown_opentelemetry_traces};
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, debug, warn};
 use utoipa::{Modify, OpenApi};
 use utoipa_scalar::{Scalar, Servable};
 
@@ -54,6 +54,7 @@ impl Modify for SecurityAddon {
         crate::presentation::handlers::rest::get_user_by_id_handler::get_user_by_id_handler,
         crate::presentation::handlers::rest::get_user_by_username_handler::get_user_by_username_handler,
         crate::presentation::handlers::emqx::auth_handler::emqx_auth_handler,
+        crate::presentation::handlers::emqx::login_handler::emqx_login_handler,
         crate::presentation::handlers::emqx::acl_handler::emqx_acl_handler,
     ),
     components(
@@ -61,6 +62,7 @@ impl Modify for SecurityAddon {
             crate::presentation::handlers::rest::create_user_handler::CreateUserRequest,
             crate::presentation::handlers::emqx::auth_handler::EmqxAuthRequest,
             crate::presentation::handlers::emqx::auth_handler::EmqxAuthResponse,
+            crate::presentation::handlers::emqx::login_handler::EmqxLoginResponse,
             crate::presentation::handlers::emqx::acl_handler::EmqxAclRequest,
             crate::presentation::handlers::emqx::acl_handler::EmqxAclResponse,
             crate::application::SuccessResponseJson,
@@ -126,7 +128,11 @@ async fn main() -> std::io::Result<()> {
         std::io::Error::other("Database initialization failed")
     })?;
 
-    let encryption = EncryptionAdapter::new();
+    let encryption_key = config.encryption_key().map_err(|e| {
+        error!("❌ Invalid encryption key: {}", e);
+        std::io::Error::other("Invalid encryption key")
+    })?;
+    let encryption = EncryptionAdapter::new(encryption_key);
     let jwt_adapter = JwtAdapter::new(&config.secret_key, "emqx-auth-service");
 
     let server_state = Arc::new(ServerState {
@@ -137,11 +143,71 @@ async fn main() -> std::io::Result<()> {
         metrics: Arc::new(metrics),
     });
 
+    // Auto-Seed Admin User if enabled
+    if config.mqtt.enabled {
+        let admin_username = config.mqtt.username.clone().unwrap_or_else(|| "iotnet_admin".to_string());
+        let admin_password = config.mqtt.password.clone().unwrap_or_else(|| "iotnet_secret_password".to_string());
+        
+        use crate::application::use_cases::CreateUserUseCase;
+        let create_user_use_case = CreateUserUseCase::new(
+            (*server_state.repository).clone(),
+            (*server_state.encryption).clone(),
+        );
+
+        match create_user_use_case.execute(&admin_username, &admin_password, true).await {
+            Ok(_) => info!("👤 Auto-seeded admin user: '{}'", admin_username),
+            Err(crate::application::use_cases::CreateUserError::UserAlreadyExists(_)) => {
+                debug!("👤 Admin user '{}' already exists, skipping seed", admin_username);
+            }
+            Err(e) => warn!("⚠️ Failed to auto-seed admin user: {}", e),
+        }
+    }
+
+    // Start MQTT RPC Adapter if enabled
+    if config.mqtt.enabled {
+        let mqtt_config = config.mqtt.clone();
+        let repository = (*server_state.repository).clone();
+        let encryption = (*server_state.encryption).clone();
+        let jwt_adapter = (*server_state.jwt_adapter).clone();
+        let metrics = Arc::clone(&server_state.metrics);
+
+        use crate::application::use_cases::*;
+        use crate::presentation::handlers::mqtt::user_handlers::UserHandlers;
+        use crate::presentation::handlers::mqtt::token_handlers::TokenHandlers;
+        use crate::infrastructure::adapters::MqttRpcAdapter;
+
+        let user_handlers = UserHandlers {
+            create_use_case: CreateUserUseCase::new(repository.clone(), encryption.clone()),
+            get_use_case: GetUserUseCase::new(repository.clone(), encryption.clone()),
+            delete_use_case: DeleteUserUseCase::new(repository.clone()),
+            list_use_case: ListUsersUseCase::new(repository.clone(), encryption.clone()),
+        };
+
+        let token_handlers = TokenHandlers {
+            issue_token_use_case: IssueTokenUseCase::new(repository.clone(), jwt_adapter.clone()),
+            auth_use_case: AuthenticateUserUseCase::new(repository.clone(), jwt_adapter.clone(), encryption.clone()),
+        };
+
+        let mqtt_adapter = MqttRpcAdapter::new(
+            mqtt_config,
+            config.api_key.clone(),
+            user_handlers,
+            token_handlers,
+            metrics,
+        );
+        
+        tokio::spawn(async move {
+            info!("📡 Starting MQTT RPC Adapter...");
+            mqtt_adapter.run().await;
+        });
+    }
+
     info!("🚀 Server running on http://0.0.0.0:5500");
 
     // Clone metrics for shutdown
     let metrics_for_shutdown = Arc::clone(&server_state.metrics);
 
+    let api_key = config.api_key.clone();
     let server = HttpServer::new(move || {
         use actix_web::App;
         use actix_web::middleware;
@@ -153,6 +219,7 @@ async fn main() -> std::io::Result<()> {
         use crate::presentation::handlers::rest::get_user_by_username_handler::GetUserByUsernameAppState;
         use crate::presentation::handlers::rest::list_users_handler::ListUsersAppState;
         use crate::presentation::handlers::emqx::auth_handler::{EmqxAuthState, emqx_auth_handler};
+        use crate::presentation::handlers::emqx::login_handler::emqx_login_handler;
         use crate::presentation::handlers::emqx::acl_handler::{EmqxAclState, emqx_acl_handler};
 
         App::new()
@@ -170,18 +237,19 @@ async fn main() -> std::io::Result<()> {
                 use_case: DeleteUserUseCase::new((*server_state.repository).clone()),
             }))
             .app_data(web::Data::new(GetByIdAppState {
-                use_case: GetUserUseCase::new((*server_state.repository).clone()),
+                use_case: GetUserUseCase::new((*server_state.repository).clone(), (*server_state.encryption).clone()),
             }))
             .app_data(web::Data::new(GetUserByUsernameAppState {
-                use_case: GetUserUseCase::new((*server_state.repository).clone()),
+                use_case: GetUserUseCase::new((*server_state.repository).clone(), (*server_state.encryption).clone()),
             }))
             .app_data(web::Data::new(ListUsersAppState {
-                use_case: ListUsersUseCase::new((*server_state.repository).clone()),
+                use_case: ListUsersUseCase::new((*server_state.repository).clone(), (*server_state.encryption).clone()),
             }))
             .app_data(web::Data::new(EmqxAuthState {
                 use_case: AuthenticateUserUseCase::new(
                     (*server_state.repository).clone(),
                     (*server_state.jwt_adapter).clone(),
+                    (*server_state.encryption).clone(),
                 ),
                 metrics: (*server_state.metrics).clone(),
             }))
@@ -198,6 +266,7 @@ async fn main() -> std::io::Result<()> {
             }))
             .service(
                 web::scope("/mqtt")
+                    .wrap(ApiKeyMiddleware::new(api_key.clone()))
                     .route("/create", web::post().to(create_user_handler))
                     .route("/users/{username}", web::get().to(get_user_by_username_handler))
                     .route("/{username}", web::delete().to(delete_user_handler))
@@ -207,7 +276,9 @@ async fn main() -> std::io::Result<()> {
             // EMQX native endpoints - format compatible with EMQX HTTP plugin
             .service(
                 web::scope("/emqx")
+                    .wrap(ApiKeyMiddleware::new(api_key.clone()))
                     .route("/auth", web::post().to(emqx_auth_handler))
+                    .route("/login", web::post().to(emqx_login_handler))
                     .route("/acl", web::post().to(emqx_acl_handler)),
             )
     })

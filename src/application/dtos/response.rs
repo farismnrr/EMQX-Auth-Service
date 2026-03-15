@@ -64,14 +64,16 @@ impl ErrorResponse {
 pub struct UserDTO {
     pub id: i64,
     pub username: String,
+    pub password: Option<String>,
     pub is_superuser: bool,
 }
 
-impl From<crate::domain::MqttUser> for UserDTO {
-    fn from(user: crate::domain::MqttUser) -> Self {
+impl UserDTO {
+    pub fn from_domain(user: crate::domain::MqttUser, decrypted_password: Option<String>) -> Self {
         Self {
             id: user.id,
             username: user.username,
+            password: decrypted_password,
             is_superuser: user.is_superuser,
         }
     }

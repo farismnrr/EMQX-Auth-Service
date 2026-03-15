@@ -44,10 +44,10 @@ impl<R: MqttUserRepository, E: EncryptionPort> CreateUserUseCase<R, E> {
             return Err(CreateUserError::UserAlreadyExists(username.to_string()));
         }
 
-        // Hash password
-        let password_hash = self
+        // Encrypt password
+        let password_ciphertext = self
             .encryption
-            .hash_password(password)
+            .encrypt_password(password)
             .map_err(|e| CreateUserError::Encryption(e.to_string()))?;
 
         // Create user
@@ -55,7 +55,7 @@ impl<R: MqttUserRepository, E: EncryptionPort> CreateUserUseCase<R, E> {
         let user = MqttUser {
             id: 0, // Will be set by database
             username: username.to_string(),
-            password_hash,
+            password_ciphertext,
             is_superuser,
             created_at: now,
             updated_at: now,

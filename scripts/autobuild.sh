@@ -59,6 +59,7 @@ echo ""
 # Parse arguments
 SKIP_TESTS=false
 PUSH_TO_REGISTRY=false
+BUILD_PLATFORMS="linux/amd64" # Default platform
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -70,12 +71,29 @@ while [[ $# -gt 0 ]]; do
             SKIP_TESTS=true
             shift
             ;;
+        --platform)
+            BUILD_PLATFORMS="$2"
+            shift 2
+            ;;
         *)
             print_warning "Unknown option: $1"
             shift
             ;;
     esac
 done
+
+# Check if we should skip local build (multi-arch or non-native)
+# If platforms contains comma, it's definitely multi-arch
+if [[ "$BUILD_PLATFORMS" == *","* ]]; then
+    print_info "Multi-architecture build detected ($BUILD_PLATFORMS). Skipping Phase 1 (Local Rust Build) to avoid cross-compilation errors."
+    SKIP_LOCAL_BUILD=true
+elif [[ "$BUILD_PLATFORMS" != "linux/amd64" ]] && [[ "$(uname -m)" == "x86_64" ]]; then
+    # Assuming the current machine is x86_64 and the target isn't linux/amd64
+    print_info "Non-native build detected ($BUILD_PLATFORMS). Skipping Phase 1 (Local Rust Build)."
+    SKIP_LOCAL_BUILD=true
+else
+    SKIP_LOCAL_BUILD=false
+fi
 
 # Check if docker is installed
 if ! command -v docker &> /dev/null; then
@@ -96,43 +114,47 @@ print_stage "PHASE 1: Local Rust Build"
 echo "========================================="
 echo ""
 
-# Collect build environment info
-RUST_VERSION=""
-CARGO_PATH=""
-
-if ! command -v cargo &> /dev/null; then
-    print_warning "Cargo not found locally. This is OK - Docker will handle the build."
+if [ "$SKIP_LOCAL_BUILD" = true ]; then
+    print_warning "Skipping local Rust build. Docker will handle the build."
 else
-    CARGO_PATH="$(which cargo)"
-    RUST_VERSION="$(rustc --version)"
-    
-    print_info "🔧 Build Environment:"
-    print_table_header "Component" "Status" "Details"
-    print_table_row "Cargo" "✓ Found" "$CARGO_PATH"
-    print_table_row "Rust" "✓ Ready" "$RUST_VERSION"
-    echo ""
-    
-    print_info "📦 Building Rust project in release mode..."
-    echo ""
-    
-    if cargo build --release 2>&1; then
-        print_success "✓ Local Rust build completed successfully"
-        
-        if [ -f "target/release/emqx_auth_service" ]; then
-            BINARY_SIZE=$(du -h target/release/emqx_auth_service | cut -f1)
-            BINARY_PATH="$(pwd)/target/release/emqx_auth_service"
-            
-            echo ""
-            print_info "📊 Build Artifact Information:"
-            print_table_header "Property" "Value" "Type"
-            print_table_row "Binary Name" "emqx_auth_service" "Executable"
-            print_table_row "Binary Size" "$BINARY_SIZE" "Release Build"
-            print_table_row "Location" "$BINARY_PATH" "Path"
-            echo ""
-        fi
+    # Collect build environment info
+    RUST_VERSION=""
+    CARGO_PATH=""
+
+    if ! command -v cargo &> /dev/null; then
+        print_warning "Cargo not found locally. This is OK - Docker will handle the build."
     else
-        print_error "Local Rust build failed!"
-        exit 1
+        CARGO_PATH="$(which cargo)"
+        RUST_VERSION="$(rustc --version)"
+        
+        print_info "🔧 Build Environment:"
+        print_table_header "Component" "Status" "Details"
+        print_table_row "Cargo" "✓ Found" "$CARGO_PATH"
+        print_table_row "Rust" "✓ Ready" "$RUST_VERSION"
+        echo ""
+        
+        print_info "📦 Building Rust project in release mode..."
+        echo ""
+        
+        if cargo build --release 2>&1; then
+            print_success "✓ Local Rust build completed successfully"
+            
+            if [ -f "target/release/emqx_auth_service" ]; then
+                BINARY_SIZE=$(du -h target/release/emqx_auth_service | cut -f1)
+                BINARY_PATH="$(pwd)/target/release/emqx_auth_service"
+                
+                echo ""
+                print_info "📊 Build Artifact Information:"
+                print_table_header "Property" "Value" "Type"
+                print_table_row "Binary Name" "emqx_auth_service" "Executable"
+                print_table_row "Binary Size" "$BINARY_SIZE" "Release Build"
+                print_table_row "Location" "$BINARY_PATH" "Path"
+                echo ""
+            fi
+        else
+            print_error "Local Rust build failed!"
+            exit 1
+        fi
     fi
 fi
 
@@ -153,12 +175,11 @@ IMAGE_VERSION=""
 IMAGE_AUTHORS="farismnrr"
 IMAGE_DESCRIPTION="Lightweight Rust-based HTTP Auth Service for EMQX, providing high-performance authentication and ACL logic with SQLite backend."
 IMAGE_SOURCE="https://github.com/farismnrr/EMQX-Auth-Service"
-BUILD_PLATFORMS="linux/amd64"
 
 print_info "🐳 Docker BuildX Configuration:"
 print_table_header "Configuration" "Value" "Status"
 print_table_row "Dockerfile" "Dockerfile" "✓ Required"
-print_table_row "Platforms" "$BUILD_PLATFORMS" "→ Single-arch (AMD64)"
+print_table_row "Platforms" "$BUILD_PLATFORMS" "→ Multi-arch Support"
 print_table_row "Local Image" "$LOCAL_IMAGE" "→ Local"
 print_table_row "Registry Image" "$REGISTRY_IMAGE" "→ GHCR"
 echo ""
@@ -400,7 +421,7 @@ if [ "$SKIP_TESTS" = false ]; then
         echo ""
     else
         print_warning "Image not found in local Docker daemon (may be multi-platform build)"
-        print_info "Use './push.sh' to build and push multi-platform image to registry"
+        print_info "Use 'make push' or './scripts/autobuild.sh --push' to build and push multi-platform image to registry"
         echo ""
     fi
     echo ""
@@ -429,7 +450,7 @@ print_info "📦 Docker Image Details:"
 print_table_header "Field" "Value" "Info"
 print_table_row "Local Image" "$LOCAL_IMAGE" "docker run compatible"
 print_table_row "Registry Image" "$REGISTRY_IMAGE" "GHCR compatible"
-print_table_row "Platforms" "$BUILD_PLATFORMS" "Single-architecture (AMD64)"
+print_table_row "Platforms" "$BUILD_PLATFORMS" "Selected architecture(s)"
 echo ""
 
 print_info "📋 OCI Image Labels & Annotations:"

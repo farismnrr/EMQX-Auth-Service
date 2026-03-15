@@ -4,8 +4,9 @@ use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use crate::application::{ErrorResponse, ListUsersUseCase, SuccessResponse, SuccessResponseJson, UserListDTO};
-use crate::infrastructure::MqttUserRepositoryImpl;
+use crate::application::{ListUsersUseCase, SuccessResponse, SuccessResponseJson};
+use crate::infrastructure::{MqttUserRepositoryImpl, EncryptionAdapter};
+use crate::utils::map_internal_error;
 
 #[derive(Debug, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -30,7 +31,7 @@ impl Default for ListUsersQuery {
 }
 
 pub struct ListUsersAppState {
-    pub use_case: ListUsersUseCase<MqttUserRepositoryImpl>,
+    pub use_case: ListUsersUseCase<MqttUserRepositoryImpl, EncryptionAdapter>,
 }
 
 #[utoipa::path(
@@ -49,6 +50,7 @@ pub struct ListUsersAppState {
                         {
                             "id": 1,
                             "username": "device_001",
+                            "password": "decrypted_password",
                             "is_superuser": false
                         }
                     ],
@@ -68,19 +70,12 @@ pub async fn list_users_handler(
     let offset = q.offset;
 
     match state.use_case.execute(limit, offset).await {
-        Ok(list) => {
-            let user_dtos: Vec<_> = list.users.into_iter().map(|u| u.into()).collect();
-            let response_data = UserListDTO {
-                users: user_dtos,
-                total: list.total,
-                limit: list.limit,
-                offset: list.offset,
-            };
+        Ok(response_data) => {
             HttpResponse::Ok().json(SuccessResponse::new(
                 "User list retrieved successfully",
                 Some(response_data),
             ))
         }
-        Err(e) => HttpResponse::InternalServerError().json(ErrorResponse::new(e.to_string())),
+        Err(e) => map_internal_error(e, "list_users"),
     }
 }

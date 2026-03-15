@@ -81,7 +81,7 @@ impl MqttUserRepository for MqttUserRepositoryImpl {
             crate::infrastructure::persistence::models::mqtt_user_model::ActiveModel {
                 id: NotSet,
                 username: sea_orm::Set(user.username),
-                password: sea_orm::Set(user.password_hash),
+                password: sea_orm::Set(user.password_ciphertext),
                 is_superuser: sea_orm::Set(user.is_superuser),
                 created_at: sea_orm::Set(user.created_at),
                 updated_at: sea_orm::Set(user.updated_at),
@@ -105,7 +105,7 @@ impl MqttUserRepository for MqttUserRepositoryImpl {
             crate::infrastructure::persistence::models::mqtt_user_model::ActiveModel {
                 id: sea_orm::Set(user.id),
                 username: sea_orm::Set(user.username),
-                password: sea_orm::Set(user.password_hash),
+                password: sea_orm::Set(user.password_ciphertext),
                 is_superuser: sea_orm::Set(user.is_superuser),
                 created_at: sea_orm::Set(user.created_at),
                 updated_at: sea_orm::Set(user.updated_at),
