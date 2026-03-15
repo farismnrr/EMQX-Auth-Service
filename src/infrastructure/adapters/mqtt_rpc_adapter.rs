@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use rumqttc::{AsyncClient, MqttOptions, QoS, Transport, TlsConfiguration};
 use serde_json::Value;
 use tracing::{error, info, warn};
 
@@ -45,7 +45,17 @@ impl MqttRpcAdapter {
 
         let mut mqttoptions = MqttOptions::new(&self.config.client_id, &self.config.broker_host, self.config.broker_port);
         mqttoptions.set_keep_alive(Duration::from_secs(30));
-        
+
+        // Configure TLS if enabled
+        if self.config.use_tls {
+            info!("🔒 MQTT TLS enabled - connecting to {}:{}", self.config.broker_host, self.config.broker_port);
+            // Use TLS with system certificates (no client cert required)
+            let tls_config = TlsConfiguration::default();
+            mqttoptions.set_transport(Transport::tls_with_config(tls_config));
+        } else {
+            info!("📡 MQTT TLS disabled - connecting to {}:{}", self.config.broker_host, self.config.broker_port);
+        }
+
         if let (Some(u), Some(p)) = (&self.config.username, &self.config.password) {
             mqttoptions.set_credentials(u, p);
         }

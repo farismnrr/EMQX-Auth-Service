@@ -38,7 +38,7 @@ aes-gcm = "0.10.3"
 base64 = "0.22.1"
 rand = "0.8.5"
 migration = { path = "migration" }
-rumqttc = "0.24"
+rumqttc = "0.25.1"
 utoipa = { version = "5.4.0", features = ["actix_extras", "chrono"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 
