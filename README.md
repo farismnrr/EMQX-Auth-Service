@@ -260,12 +260,15 @@ All MQTT RPC messages use JSON format with envelope structure:
 {
   "schema_version": 1,
   "request_id": "unique-uuid-here",
-  "reply_to": "iotnet/auth/replies/backend-instance-1",
+  "reply_to": "iotnet/auth/replies/iotnet-backend",
   "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
+  "api_key": "your-api-key-here",
+  "timestamp": 1710847200000,
   // ... operation-specific fields
 }
 ```
+
+**Note:** `timestamp` must be epoch **milliseconds** (not seconds). Requests older than 5 minutes will be rejected with `REQUEST_EXPIRED`.
 
 **Response Envelope:**
 ```json
@@ -274,7 +277,6 @@ All MQTT RPC messages use JSON format with envelope structure:
   "request_id": "unique-uuid-here",
   "success": true,
   "message": "Operation completed successfully",
-  "code": null,
   "data": { /* operation-specific data */ }
 }
 ```
@@ -286,6 +288,7 @@ All MQTT RPC messages use JSON format with envelope structure:
 | `iotnet/auth/commands/users.create` | PUBLISH | Create a new MQTT user |
 | `iotnet/auth/commands/users.delete` | PUBLISH | Delete an existing MQTT user |
 | `iotnet/auth/commands/users.get` | PUBLISH | Get user by username |
+| `iotnet/auth/commands/users.list` | PUBLISH | List MQTT users |
 | `iotnet/auth/commands/tokens.issue` | PUBLISH | Issue JWT token for user |
 | `iotnet/auth/commands/tokens.verify` | PUBLISH | Verify user password |
 
@@ -293,14 +296,14 @@ All MQTT RPC messages use JSON format with envelope structure:
 
 Responses are published to the `reply_to` topic specified in the request:
 - Format: `iotnet/auth/replies/{requested_by}`
-- Example: `iotnet/auth/replies/backend-prod-1`
+- Example: `iotnet/auth/replies/iotnet-backend`
 
 ### Security Model
 
 1. **Allowed Requesters**: Only requesters in `MQTT_ADMIN_ALLOWED_REQUESTERS` can issue commands
 2. **Reply Topic Binding**: `reply_to` must exactly match `iotnet/auth/replies/{requested_by}`
-3. **Token Issuance Protection**: For `tokens.issue`, `target_user` must match `requested_by` (prevents minting tokens for other users)
-4. **Timestamp Validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
+3. **Timestamp Validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
+4. **Schema Enforcement**: `schema_version` must be `1`.
 
 ### Example: Create User via MQTT RPC
 
@@ -309,22 +312,21 @@ Responses are published to the `reply_to` topic specified in the request:
 {
   "schema_version": 1,
   "request_id": "req-123-abc",
-  "reply_to": "iotnet/auth/replies/backend-1",
+  "reply_to": "iotnet/auth/replies/iotnet-backend",
   "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
+  "api_key": "your-api-key-here",
+  "timestamp": 1710847200000,
   "username": "new_user",
   "password": "secure_password_123",
   "is_superuser": false
 }
 
-// Response on: iotnet/auth/replies/backend-1
+// Response on: iotnet/auth/replies/iotnet-backend
 {
   "schema_version": 1,
   "request_id": "req-123-abc",
   "success": true,
-  "message": "User created successfully",
-  "code": null,
-  "data": null
+  "message": "User created successfully"
 }
 ```
 
@@ -335,25 +337,42 @@ Responses are published to the `reply_to` topic specified in the request:
 {
   "schema_version": 1,
   "request_id": "req-456-def",
-  "reply_to": "iotnet/auth/replies/backend-1",
+  "reply_to": "iotnet/auth/replies/iotnet-backend",
   "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
-  "username": "device_001",
-  "target_user": "iotnet-backend"  // Must match requested_by
+  "api_key": "your-api-key-here",
+  "timestamp": 1710847200000,
+  "username": "device_001"
 }
 
-// Response on: iotnet/auth/replies/backend-1
+// Response on: iotnet/auth/replies/iotnet-backend
 {
   "schema_version": 1,
   "request_id": "req-456-def",
   "success": true,
   "message": "Token issued successfully",
-  "code": null,
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }
 }
 ```
+
+### Error Codes
+
+When `success` is `false`, a `code` field is included:
+
+| Code | Description |
+|------|-------------|
+| `BAD_REQUEST` | Missing required envelope fields |
+| `UNAUTHORIZED_COMMAND` | Invalid API key or requester not allowed |
+| `INVALID_REPLY_TOPIC` | `reply_to` does not match `requested_by` binding |
+| `REQUEST_EXPIRED` | Timestamp window validation failed |
+| `UNSUPPORTED_SCHEMA_VERSION` | `schema_version` is not `1` |
+| `UNKNOWN_COMMAND` | Command in topic is not recognized |
+| `VALIDATION_ERROR` | Operation payload format is invalid |
+| `USER_NOT_FOUND` | Target user does not exist |
+| `USER_ALREADY_EXISTS` | Cannot create duplicate user |
+| `INVALID_CREDENTIALS` | Password verification failed |
+| `INTERNAL_ERROR` | Unexpected server error |
 
 For complete MQTT RPC API documentation, see [api_documentation.md](api_documentation.md#mqtt-rpc-api-backend-integration).
 

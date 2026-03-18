@@ -52,3 +52,4 @@ tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 log = "0.4"
 tracing-log = "0.2"
+regex = "1.10"
