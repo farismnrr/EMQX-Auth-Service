@@ -9,6 +9,7 @@ pub struct MqttRpcRequest<T> {
     pub request_id: String,
     pub reply_to: String,
     pub requested_by: String,
+    pub api_key: String,
     pub timestamp: i64,
     #[serde(flatten)]
     pub data: T,
