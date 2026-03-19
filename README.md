@@ -186,6 +186,55 @@ Response: 200 OK
 }
 ```
 
+### Generate JWT Token
+
+Generate a JWT token for EMQX authentication. The token can be used as the password when connecting to the MQTT broker.
+
+```
+POST /mqtt/jwt
+Content-Type: application/json
+x-api-key: <your-api-key>
+
+{
+  "username": "<client_name>"
+}
+
+Response: 200 OK
+{
+  "success": true,
+  "message": "JWT token generated successfully",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_at": "2026-03-20T12:00:00Z"
+  }
+}
+```
+
+**JWT Token Configuration:**
+- Algorithm: HS256 (HMAC-SHA256)
+- Issuer: `broker.i-ot.net`
+- Audience: `mqtt`
+- Expiration: 24 hours
+- Secret: Configured via `SECRET_KEY` environment variable
+
+**Usage with EMQX:**
+```python
+import paho.mqtt.client as mqtt
+
+# Get JWT token from auth service
+token_response = requests.post(
+    "http://localhost:5500/mqtt/jwt",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    json={"username": "client_001"}
+)
+jwt_token = token_response.json()["data"]["token"]
+
+# Connect to EMQX using JWT as password
+client = mqtt.Client(client_id="client_001")
+client.username_pw_set("client_001", jwt_token)
+client.connect("broker.i-ot.net", 1883)
+```
+
 ### Check ACL Permission
 
 ```

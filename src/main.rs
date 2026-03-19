@@ -52,10 +52,13 @@ impl Modify for SecurityAddon {
         crate::presentation::handlers::rest::create_user_handler::create_user_handler,
         crate::presentation::handlers::rest::delete_user_handler::delete_user_handler,
         crate::presentation::handlers::rest::list_users_handler::list_users_handler,
+        crate::presentation::handlers::rest::jwt_handler::jwt_handler,
     ),
     components(
         schemas(
             crate::presentation::handlers::rest::create_user_handler::CreateUserRequest,
+            crate::presentation::handlers::rest::jwt_handler::JwtRequest,
+            crate::presentation::handlers::rest::jwt_handler::JwtResponseData,
             crate::application::SuccessResponseJson,
             crate::application::ErrorResponse,
             crate::application::UserDTO,
@@ -143,14 +146,17 @@ async fn main() -> std::io::Result<()> {
     let metrics_for_shutdown = Arc::clone(&server_state.metrics);
 
     let api_key = config.api_key.clone();
+    let secret_key = config.secret_key.clone();
     let server = HttpServer::new(move || {
         use actix_web::App;
         use actix_web::middleware;
         use crate::application::*;
+        use crate::application::use_cases::GenerateJwtUseCase;
         use crate::presentation::handlers::rest::*;
         use crate::presentation::handlers::rest::create_user_handler::CreateUserAppState;
         use crate::presentation::handlers::rest::delete_user_handler::DeleteUserAppState;
         use crate::presentation::handlers::rest::list_users_handler::ListUsersAppState;
+        use crate::presentation::handlers::rest::jwt_handler::JwtAppState;
 
         App::new()
             .app_data(web::Data::new(Arc::clone(&server_state)))
@@ -166,6 +172,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(ListUsersAppState {
                 use_case: ListUsersUseCase::new((*server_state.repository).clone()),
             }))
+            .app_data(web::Data::new(JwtAppState {
+                use_case: GenerateJwtUseCase::new((*server_state.repository).clone(), secret_key.clone()),
+            }))
             .app_data(web::Data::new(Arc::clone(&server_state.db)))
             // 📖 Scalar UI
             .service(Scalar::with_url("/openapi", ApiDoc::openapi()))
@@ -179,7 +188,8 @@ async fn main() -> std::io::Result<()> {
                     .wrap(ApiKeyMiddleware::new(api_key.clone()))
                     .route("/create", web::post().to(create_user_handler))
                     .route("", web::get().to(list_users_handler))
-                    .route("/{username}", web::delete().to(delete_user_handler)),
+                    .route("/{username}", web::delete().to(delete_user_handler))
+                    .route("/jwt", web::post().to(jwt_handler)),
             )
     })
     .bind(("0.0.0.0", 5500))?
