@@ -4,6 +4,26 @@ Dokumen ini menjelaskan cara mengonfigurasi **EMQX Auth Service** dan **EMQX Bro
 
 ---
 
+## 🔐 Production Listener Configuration (Matching Tunneling Server)
+
+Untuk produksi, EMQX broker dikonfigurasi dengan listener berikut:
+
+| Port  | Protocol | Description                          |
+|-------|----------|--------------------------------------|
+| 1883  | MQTT     | Plain MQTT (unencrypted)             |
+| 8083  | WebSocket| Plain WebSocket (unencrypted)        |
+| 8883  | SSL/TLS  | Secure MQTT over TLS                 |
+| 8084  | WSS      | Secure WebSocket over TLS            |
+| 18083 | HTTP     | Dashboard API                        |
+
+### SSL Certificate Setup
+
+Pastikan file sertifikat SSL tersedia di `/etc/emqx/certs/`:
+- `broker.i-ot.net.crt` - SSL certificate
+- `broker.i-ot.net.key` - SSL private key
+
+---
+
 ## 🏗️ 3 Route Utama (EMQX Native)
 
 Service ini menyediakan 3 endpoint khusus yang dirancang untuk berkomunikasi langsung dengan hook HTTP EMQX:

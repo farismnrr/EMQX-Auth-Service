@@ -1,6 +1,6 @@
 services:
   ##==========================================================================
-  ## EMQX MQTT Broker
+  ## EMQX MQTT Broker (Matching Tunneling Server Configuration)
   ##==========================================================================
   emqx:
     image: emqx/emqx:5.8.0
@@ -11,16 +11,31 @@ services:
     ports:
       - "1883:1883"
       - "8083:8083"
-      ## SSL and WSS ports removed for security
+      - "8883:8883"    ## SSL/TLS
+      - "8084:8084"    ## WSS
     volumes:
       - ./scripts/emqx-setup.sh:/opt/emqx/emqx-setup.sh:ro
       - emqx_data:/opt/emqx/data
       - emqx_logs:/opt/emqx/log
+      ## SSL Certificates (matching tunneling server: /etc/emqx/certs/)
+      - ./certs:/etc/emqx/certs:ro
     environment:
       EMQX_NAME: "emqx"
       EMQX_HOST: "0.0.0.0"
-      ## Disable Dashboard listener by default for "Full CLI" approach
-      EMQX_DASHBOARD__LISTENERS__HTTP__BIND: "0"
+      EMQX_NODE__NAME: "emqx@127.0.0.1"
+      EMQX_CLUSTER__NAME: "emqxcl"
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: "manual"
+      EMQX_DASHBOARD__LISTENERS__HTTP__BIND: "18083"
+      EMQX_LISTENERS__SSL__DEFAULT__BIND: "8883"
+      EMQX_LISTENERS__SSL__DEFAULT__ENABLE: "true"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__CERTFILE: "/etc/emqx/certs/broker.i-ot.net.crt"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__KEYFILE: "/etc/emqx/certs/broker.i-ot.net.key"
+      EMQX_LISTENERS__SSL__DEFAULT__SSL_OPTIONS__VERIFY: "verify_none"
+      EMQX_LISTENERS__WSS__DEFAULT__BIND: "8084"
+      EMQX_LISTENERS__WSS__DEFAULT__ENABLE: "true"
+      EMQX_LISTENERS__WSS__DEFAULT__SSL_OPTIONS__CERTFILE: "/etc/emqx/certs/broker.i-ot.net.crt"
+      EMQX_LISTENERS__WSS__DEFAULT__SSL_OPTIONS__KEYFILE: "/etc/emqx/certs/broker.i-ot.net.key"
+      EMQX_LISTENERS__WSS__DEFAULT__SSL_OPTIONS__VERIFY: "verify_none"
       AUTH_SERVICE_URL: "http://emqx-auth-service:5500"
       API_KEY: "${API_KEY}"
     healthcheck:
