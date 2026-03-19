@@ -6,7 +6,7 @@ use actix_web::{
 };
 use futures_util::future::LocalBoxFuture;
 use std::{future::{ready, Ready}, time::Instant};
-use crate::infrastructure::metrics::AppMetrics;
+use crate::infrastructure::telemetry::AppMetrics;
 
 /// Metrics middleware
 pub struct MetricsMiddleware {

@@ -1,6 +1,5 @@
 //! Create User Use Case
 
-use crate::application::ports::EncryptionPort;
 use crate::domain::{MqttUser, MqttUserRepository};
 use thiserror::Error;
 
@@ -12,22 +11,16 @@ pub enum CreateUserError {
     ValidationError(String),
     #[error("Repository error: {0}")]
     Repository(#[from] crate::domain::RepositoryError),
-    #[error("Encryption error: {0}")]
-    Encryption(String),
 }
 
 /// Use case for creating a new MQTT user
-pub struct CreateUserUseCase<R, E> {
+pub struct CreateUserUseCase<R> {
     repository: R,
-    encryption: E,
 }
 
-impl<R: MqttUserRepository, E: EncryptionPort> CreateUserUseCase<R, E> {
-    pub fn new(repository: R, encryption: E) -> Self {
-        Self {
-            repository,
-            encryption,
-        }
+impl<R: MqttUserRepository> CreateUserUseCase<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
     }
 
     pub async fn execute(
@@ -44,21 +37,16 @@ impl<R: MqttUserRepository, E: EncryptionPort> CreateUserUseCase<R, E> {
             return Err(CreateUserError::UserAlreadyExists(username.to_string()));
         }
 
-        // Encrypt password
-        let password_ciphertext = self
-            .encryption
-            .encrypt_password(password)
-            .map_err(|e| CreateUserError::Encryption(e.to_string()))?;
-
-        // Create user
+        // Create user with plain password
         let now = chrono::Utc::now();
+        let naive_now = now.naive_utc();
         let user = MqttUser {
             id: 0, // Will be set by database
             username: username.to_string(),
-            password_ciphertext,
+            password: password.to_string(),
             is_superuser,
-            created_at: now,
-            updated_at: now,
+            created_at: Some(naive_now),
+            updated_at: Some(naive_now),
         };
 
         self.repository.insert(user).await?;

@@ -2,10 +2,10 @@
 //! Compatible with opentelemetry 0.31
 
 use log::info;
+use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
 use opentelemetry::{global, KeyValue};
-use opentelemetry::metrics::{Counter, Histogram, UpDownCounter, Meter};
-use opentelemetry_sdk::metrics::{SdkMeterProvider, PeriodicReader};
 use opentelemetry_otlp::{MetricExporter, WithExportConfig};
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,7 +44,10 @@ pub struct AuthMetrics {
 
 impl AppMetrics {
     /// Initialize OpenTelemetry Metrics
-    pub fn new(service_name: &str, otlp_endpoint: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        service_name: &str,
+        otlp_endpoint: &str,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         info!("📊 Initializing OpenTelemetry Metrics...");
         info!("   Endpoint: {}", otlp_endpoint);
         info!("   Service: {}", service_name);
@@ -71,7 +74,7 @@ impl AppMetrics {
                         KeyValue::new("service.name", service_name_owned),
                         KeyValue::new("service.version", env!("CARGO_PKG_VERSION")),
                     ])
-                    .build()
+                    .build(),
             )
             .with_reader(reader)
             .build();
@@ -94,6 +97,32 @@ impl AppMetrics {
             auth_metrics,
             _provider: Arc::new(provider),
         })
+    }
+
+    /// Create disabled/no-op metrics for local development
+    pub fn new_disabled() -> Self {
+        // Use global noop meter provider
+        let meter = global::meter("noop");
+
+        // Create instruments anyway (they just won't export)
+        let http_metrics = create_http_metrics(&meter).unwrap_or_else(|_| HttpMetrics {
+            duration: meter.f64_histogram("noop").build(),
+            request_counter: meter.u64_counter("noop").build(),
+            active_requests: meter.i64_up_down_counter("noop").build(),
+        });
+        let auth_metrics = create_auth_metrics(&meter).unwrap_or_else(|_| AuthMetrics {
+            auth_requests_total: meter.u64_counter("noop").build(),
+            auth_success: meter.u64_counter("noop").build(),
+            auth_failure: meter.u64_counter("noop").build(),
+            mqtt_users_total: meter.i64_up_down_counter("noop").build(),
+        });
+
+        Self {
+            meter,
+            http_metrics,
+            auth_metrics,
+            _provider: Arc::new(SdkMeterProvider::default()),
+        }
     }
 
     /// Get HTTP metrics
@@ -190,13 +219,7 @@ pub fn create_auth_metrics(meter: &Meter) -> Result<AuthMetrics, Box<dyn std::er
 
 impl HttpMetrics {
     /// Record an HTTP request
-    pub fn record(
-        &self,
-        method: &str,
-        path: &str,
-        status: u16,
-        duration_secs: f64,
-    ) {
+    pub fn record(&self, method: &str, path: &str, status: u16, duration_secs: f64) {
         let attributes = [
             KeyValue::new("http.method", method.to_string()),
             KeyValue::new("http.route", path.to_string()),

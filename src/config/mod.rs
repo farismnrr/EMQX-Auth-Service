@@ -1,12 +1,9 @@
 //! Application configuration
 
 pub mod database_config;
-pub mod mqtt_config;
 
 pub use database_config::DatabaseConfig;
-pub use mqtt_config::MqttConfig;
 
-use crate::utils::EncryptionError;
 use dotenvy::dotenv;
 use std::env;
 
@@ -15,7 +12,6 @@ use std::env;
 #[allow(dead_code)]
 pub struct AppConfig {
     pub database: DatabaseConfig,
-    pub mqtt: MqttConfig,
     pub secret_key: String,
     pub api_key: String,
     pub log_level: String,
@@ -32,11 +28,7 @@ impl AppConfig {
 
         let api_key = env::var("API_KEY").map_err(|_| "API_KEY is not set".to_string())?;
 
-        let _encryption_key = env::var("MQTT_PASS_ENCRYPTION_KEY")
-            .map_err(|_| "MQTT_PASS_ENCRYPTION_KEY is not set".to_string())?;
-
         let database = DatabaseConfig::from_env()?;
-        let mqtt = MqttConfig::from_env();
 
         let log_level = env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
         let rate_limit_rpm = env::var("MQTT_AUTH_RATE_LIMIT")
@@ -50,7 +42,6 @@ impl AppConfig {
 
         Ok(Self {
             database,
-            mqtt,
             secret_key,
             api_key,
             log_level,
@@ -58,12 +49,5 @@ impl AppConfig {
             otlp_endpoint,
             otlp_service_name,
         })
-    }
-
-    #[allow(dead_code)]
-    pub fn encryption_key(&self) -> Result<[u8; 32], EncryptionError> {
-        let key_hex = std::env::var("MQTT_PASS_ENCRYPTION_KEY")
-            .map_err(|e| EncryptionError::InvalidKey(e.to_string()))?;
-        crate::utils::hex_to_key32(&key_hex)
     }
 }

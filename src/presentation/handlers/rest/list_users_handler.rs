@@ -5,7 +5,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::application::{ListUsersUseCase, SuccessResponse, SuccessResponseJson};
-use crate::infrastructure::{MqttUserRepositoryImpl, EncryptionAdapter};
+use crate::infrastructure::MqttUserRepositoryImpl;
 use crate::utils::map_internal_error;
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -31,13 +31,13 @@ impl Default for ListUsersQuery {
 }
 
 pub struct ListUsersAppState {
-    pub use_case: ListUsersUseCase<MqttUserRepositoryImpl, EncryptionAdapter>,
+    pub use_case: ListUsersUseCase<MqttUserRepositoryImpl>,
 }
 
 #[utoipa::path(
     get,
     path = "/mqtt",
-    tag = "MQTT",
+    tag = "Users",
     params(ListUsersQuery),
     security(("api_key" = [])),
     responses(
@@ -50,7 +50,6 @@ pub struct ListUsersAppState {
                         {
                             "id": 1,
                             "username": "device_001",
-                            "password": "decrypted_password",
                             "is_superuser": false
                         }
                     ],

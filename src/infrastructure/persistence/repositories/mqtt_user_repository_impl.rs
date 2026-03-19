@@ -24,7 +24,7 @@ impl MqttUserRepositoryImpl {
 
 #[async_trait]
 impl MqttUserRepository for MqttUserRepositoryImpl {
-    async fn find_by_id(&self, id: i64) -> Result<Option<MqttUser>, RepositoryError> {
+    async fn find_by_id(&self, id: i32) -> Result<Option<MqttUser>, RepositoryError> {
         debug!("[Repository] Finding user by ID: {}", id);
 
         let model = MqttUserEntity::find_by_id(id)
@@ -81,8 +81,8 @@ impl MqttUserRepository for MqttUserRepositoryImpl {
             crate::infrastructure::persistence::models::mqtt_user_model::ActiveModel {
                 id: NotSet,
                 username: sea_orm::Set(user.username),
-                password: sea_orm::Set(user.password_ciphertext),
-                is_superuser: sea_orm::Set(user.is_superuser),
+                password_hash: sea_orm::Set(user.password),
+                is_superuser: sea_orm::Set(Some(user.is_superuser)),
                 created_at: sea_orm::Set(user.created_at),
                 updated_at: sea_orm::Set(user.updated_at),
             };
@@ -105,8 +105,8 @@ impl MqttUserRepository for MqttUserRepositoryImpl {
             crate::infrastructure::persistence::models::mqtt_user_model::ActiveModel {
                 id: sea_orm::Set(user.id),
                 username: sea_orm::Set(user.username),
-                password: sea_orm::Set(user.password_ciphertext),
-                is_superuser: sea_orm::Set(user.is_superuser),
+                password_hash: sea_orm::Set(user.password),
+                is_superuser: sea_orm::Set(Some(user.is_superuser)),
                 created_at: sea_orm::Set(user.created_at),
                 updated_at: sea_orm::Set(user.updated_at),
             };

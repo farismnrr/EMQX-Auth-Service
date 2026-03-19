@@ -94,11 +94,12 @@ impl DatabaseConfig {
                 let name = env::var("DB_NAME").unwrap_or_else(|_| "emqx_auth".to_string());
                 let user = env::var("DB_USER").unwrap_or_else(|_| "postgres".to_string());
                 let password = env::var("DB_PASSWORD").unwrap_or_default();
+                let schema = env::var("DB_SCHEMA").unwrap_or_else(|_| "public".to_string());
 
-                // PostgreSQL URL format: postgres://user:password@host:port/database
+                // PostgreSQL URL format: postgres://user:password@host:port/database?options=-c search_path%3Dschema
                 Ok(format!(
-                    "postgres://{}:{}@{}:{}/{}",
-                    user, password, host, port, name
+                    "postgres://{}:{}@{}:{}/{}?options=-c%20search_path%3D{}",
+                    user, password, host, port, name, schema
                 ))
             }
             DatabaseType::Mysql => {
