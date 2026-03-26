@@ -1,146 +1,79 @@
-# 🚀 EMQX Auth Service - Production Setup Guide
+# EMQX Auth Service Production Setup
 
-Dokumen ini menjelaskan cara mengonfigurasi **EMQX Auth Service** dan **EMQX Broker (v5+)** untuk lingkungan produksi menggunakan skema keamanan **AES-256-GCM** dan **JWT**.
+This document describes how to configure EMQX Auth Service and EMQX Broker (v5+) for production with AES-256-GCM and JWT.
 
----
+## Listener Baseline
 
-## 🔐 Production Listener Configuration (Matching Tunneling Server)
+For production deployments, configure EMQX listeners explicitly and expose only required ports.
 
-Untuk produksi, EMQX broker dikonfigurasi dengan listener berikut:
+## Certificates
 
-| Port  | Protocol | Description                          |
-|-------|----------|--------------------------------------|
-| 1883  | MQTT     | Plain MQTT (unencrypted)             |
-| 8083  | WebSocket| Plain WebSocket (unencrypted)        |
-| 8883  | SSL/TLS  | Secure MQTT over TLS                 |
-| 8084  | WSS      | Secure WebSocket over TLS            |
-| 18083 | HTTP     | Dashboard API                        |
+Ensure SSL certificate files are available at:
 
-### SSL Certificate Setup
+`/etc/emqx/certs/`
 
-Pastikan file sertifikat SSL tersedia di `/etc/emqx/certs/`:
-- `broker.i-ot.net.crt` - SSL certificate
-- `broker.i-ot.net.key` - SSL private key
+Use valid server certificates and private keys signed by a trusted CA (or your internal CA).
 
----
+## Auth Service Endpoints
 
-## 🏗️ 3 Route Utama (EMQX Native)
+The service provides three EMQX-facing endpoints:
 
-Service ini menyediakan 3 endpoint khusus yang dirancang untuk berkomunikasi langsung dengan hook HTTP EMQX:
+1. Credential authentication endpoint
+2. JWT issuance endpoint
+3. ACL authorization endpoint (publish/subscribe checks)
 
-### 1. `POST /emqx/auth` (Authentication)
-Digunakan oleh EMQX untuk memvalidasi username dan password client saat mencoba terhubung.
-*   **Logika**: Service mengambil ciphertext dari database, mendekripsinya menggunakan kunci AES, dan mencocokkannya dengan password yang dikirim client.
-*   **Response**: 
-    ```json
-    { "result": "allow", "is_superuser": false } // atau "deny"
-    ```
+## Authentication Logic
 
-### 2. `POST /emqx/login` (JWT Issuance)
-Endpoint bagi client/aplikasi untuk mendapatkan token JWT.
-*   **Fungsi**: Client mengirim kredensial (plain text), jika valid, service akan memberikan token JWT yang ditandatangani dengan `SECRET_KEY`.
-*   **Response**:
-    ```json
-    { "result": "allow", "token": "eyJhbGci..." }
-    ```
+- EMQX sends username/password to the auth endpoint.
+- Service decrypts stored ciphertext (AES key from environment).
+- Service compares credentials and returns allow/deny response.
 
-### 3. `POST /emqx/acl` (Authorization)
-Digunakan oleh EMQX untuk mengecek apakah seorang user diizinkan melakukan **Publish** atau **Subscribe** ke suatu topic.
-*   **Aturan Default**: 
-    *   **Superuser**: Akses penuh ke semua topic.
-    *   **Regular User**: Hanya diizinkan mengakses topic dengan prefix `users/{username}/`.
-*   **Response**:
-    ```json
-    { "result": "allow" } // atau "deny"
-    ```
+## JWT Flow
 
----
+- Client sends credentials to token endpoint.
+- Service validates credentials and issues a signed JWT.
+- Signing key is read from `SECRET_KEY`.
 
-## ⚙️ Konfigurasi Environment
+## ACL Logic
 
-Pastikan file `.env` di produksi memiliki variabel berikut:
+- Superuser: full topic access.
+- Regular user: topic access constrained by username prefix policy.
 
-```bash
-# Kunci untuk menandatangani JWT (Sangat Rahasia)
-SECRET_KEY=your_super_secret_jwt_key
+## Required Environment Variables
 
-# Kunci 64-karakter hex untuk enkripsi AES-256-GCM (Password di DB)
-MQTT_PASS_ENCRYPTION_KEY=64_hex_characters_here
-
-# API Key untuk mengamankan komunikasi EMQX -> Auth Service
-API_KEY=your_internal_api_key
+```env
+SECRET_KEY=replace-with-strong-secret
+MQTT_PASS_ENCRYPTION_KEY=64-hex-char-key
+EMQX_API_KEY=replace-with-internal-api-key
 ```
 
----
+## Production Hardening
 
-## 🛠️ Konfigurasi EMQX Broker (v5.x)
+1. Bind auth service to internal network (`127.0.0.1` or private Docker network).
+2. Do not expose internal auth ports publicly.
+3. Rotate encryption and signing keys with a controlled plan.
+4. Monitor server-side logs for decryption/auth failures.
+5. Restrict superuser usage to backend/admin accounts only.
 
-Untuk performa dan keamanan terbaik di produksi, gunakan konfigurasi **HOCON**. Anda bisa memuat konfigurasi ini melalui Dashboard (Access Control) atau via CLI (`emqx_ctl conf load`).
+## EMQX Config Recommendations
 
-### 1. Authentication Chain (JWT & HTTP)
-Susun agar EMQX mengecek JWT terlebih dahulu, baru kemudian HTTP Auth.
+- Prefer HOCON configuration in production.
+- Set deny-by-default behavior for unmatched authorization rules.
+- Keep auth and ACL hooks deterministic and observable.
 
-```hocon
-authentication = [
-  {
-    mechanism = "jwt"
-    use_jwks = false
-    algorithm = "hmac-based"
-    secret = "PASTE_YOUR_SECRET_KEY_HERE"
-    from = "password"
-    enable = true
-  },
-  {
-    mechanism = "password_based"
-    backend = "http"
-    enable = true
-    method = "post"
-    url = "http://emqx-auth-service:5500/emqx/auth"
-    headers {
-      "Content-Type" = "application/json"
-      "x-api-key" = "PASTE_YOUR_API_KEY_HERE"
-    }
-    body {
-      username = "${username}"
-      password = "${password}"
-    }
-  }
-]
-```
+## Validation Checklist
 
-### 2. Authorization (ACL)
-Pastikan `no_match = deny` untuk keamanan maksimal.
+- [ ] TLS listener active with valid cert chain
+- [ ] Auth endpoint reachable from EMQX
+- [ ] JWT endpoint signs and verifies tokens correctly
+- [ ] ACL endpoint enforces topic boundaries
+- [ ] Internal API keys and secrets are not logged
 
-```hocon
-authorization {
-  no_match = "deny"
-  cache { enable = true, ttl = "1m" }
-  sources = [
-    {
-      type = "http"
-      enable = true
-      method = "post"
-      url = "http://emqx-auth-service:5500/emqx/acl"
-      headers {
-        "Content-Type" = "application/json"
-        "x-api-key" = "PASTE_YOUR_API_KEY_HERE"
-      }
-      body {
-        username = "${username}"
-        clientid = "${clientid}"
-        topic = "${topic}"
-        action = "${action}"
-      }
-    }
-  ]
-}
-```
+## Incident Response Notes
 
----
+If encryption keys are leaked:
 
-## 🔒 Security Best Practices
-
-1.  **Localhost Binding**: Selalu jalankan Auth Service di port lokal (`127.0.0.1:5505`) atau di dalam Docker Network internal. Jangan expose port 5500/5505 ke internet publik.
-2.  **Key Rotation**: Jika `MQTT_PASS_ENCRYPTION_KEY` bocor, Anda harus mengenkripsi ulang seluruh password di database. Jaga kunci ini dengan sangat ketat.
-3.  **Audit Logs**: Cek logs secara berkala jika terjadi `Internal Server Error`. Detail kegagalan enkripsi/dekripsi hanya muncul di server logs, tidak dikirim ke client API.
-4.  **Superuser**: Gunakan field `is_superuser: true` di database hanya untuk sistem backend atau admin IoTNet agar memiliki akses kontrol penuh tanpa batasan topic.
+1. Rotate keys immediately.
+2. Re-encrypt stored credentials as required.
+3. Invalidate issued tokens if signing key was affected.
+4. Review logs and access history.
