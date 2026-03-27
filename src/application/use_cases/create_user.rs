@@ -1,6 +1,7 @@
 //! Create User Use Case
 
 use crate::domain::{MqttUser, MqttUserRepository};
+use bcrypt::{hash, DEFAULT_COST};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -11,6 +12,8 @@ pub enum CreateUserError {
     ValidationError(String),
     #[error("Repository error: {0}")]
     Repository(#[from] crate::domain::RepositoryError),
+    #[error("Failed to hash password: {0}")]
+    HashError(String),
 }
 
 /// Use case for creating a new MQTT user
@@ -37,13 +40,17 @@ impl<R: MqttUserRepository> CreateUserUseCase<R> {
             return Err(CreateUserError::UserAlreadyExists(username.to_string()));
         }
 
-        // Create user with plain password
+        // Hash password with bcrypt
+        let password_hash = hash(password, DEFAULT_COST)
+            .map_err(|e| CreateUserError::HashError(e.to_string()))?;
+
+        // Create user with hashed password
         let now = chrono::Utc::now();
         let naive_now = now.naive_utc();
         let user = MqttUser {
             id: 0, // Will be set by database
             username: username.to_string(),
-            password: password.to_string(),
+            password: password_hash,
             is_superuser,
             created_at: Some(naive_now),
             updated_at: Some(naive_now),
