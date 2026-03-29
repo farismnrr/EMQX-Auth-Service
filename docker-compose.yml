@@ -5,7 +5,7 @@ services:
   emqx-auth-service:
     image: ghcr.io/farismnrr/emqx-auth-service:latest
     container_name: emqx-auth-service
-    pull_policy: if_not_present
+    pull_policy: always
     restart: unless-stopped
     network_mode: host
     ports:

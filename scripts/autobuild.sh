@@ -132,10 +132,13 @@ else
         print_table_row "Cargo" "✓ Found" "$CARGO_PATH"
         print_table_row "Rust" "✓ Ready" "$RUST_VERSION"
         echo ""
-        
-        print_info "📦 Building Rust project in release mode..."
+
+        print_info "📦 Building Rust project in release mode (clean build)..."
         echo ""
-        
+
+        # Clean cargo cache before build to ensure fresh compilation
+        cargo clean
+
         if cargo build --release 2>&1; then
             print_success "✓ Local Rust build completed successfully"
             
@@ -345,12 +348,12 @@ if [ "$PUSH_TO_REGISTRY" = true ]; then
     fi
     echo ""
     
-    BUILD_ARGS+=("-t" "${FULL_IMAGE_NAME}" "--push")
+    BUILD_ARGS+=("-t" "${FULL_IMAGE_NAME}" "--push" "--load" "--no-cache" "--pull")
 else
-    BUILD_ARGS+=("-t" "${LOCAL_IMAGE}")
+    BUILD_ARGS+=("-t" "${LOCAL_IMAGE}" "--no-cache" "--pull")
 fi
 
-# Build with docker buildx
+# Build with docker buildx (no cache, fresh pull of base images)
 docker buildx build "${BUILD_ARGS[@]}" .
 
 if [ $? -eq 0 ]; then
