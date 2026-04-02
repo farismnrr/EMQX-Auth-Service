@@ -1,0 +1,31 @@
+services:
+  emqx-auth-service:
+    image: ghcr.io/farismnrr/emqx-auth-service:latest
+    container_name: emqx-auth-service-local
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "5500:5500"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LOG_LEVEL: debug
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
+      API_KEY: ${EMQX_AUTH_API_KEY:-45514c53469b886e1cd1141a952ecf847061669dd26a06cdbcb08790461bb78018ac460bd1b54fe0a50efa3b7a79c591b85dc0919510b385114710d323fed9f5}
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: 3306
+      MYSQL_USER: teralux
+      MYSQL_PASSWORD: teraluxpass
+      MYSQL_DATABASE: teralux
+      MQTT_ADMIN_ENABLED: "false"
+      MQTT_BROKER_HOST: host.docker.internal
+      MQTT_BROKER_PORT: "1883"
+      MQTT_USE_TLS: "false"
+      MQTT_USE_SHARED_SUB: "true"
+      MQTT_PASS_ENCRYPTION_KEY: ${MQTT_PASS_ENCRYPTION_KEY:-your-encryption-key-here}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5500/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

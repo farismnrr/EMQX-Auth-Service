@@ -30,6 +30,8 @@ All HTTP endpoints (except the root health check) require authentication via an 
 **Header:** `x-api-key: <API_KEY>`
 **Mode:** Direct string.
 
+> **Important:** All HTTP endpoints (except the root health check) require authentication using the `x-api-key` header. Do not use `Authorization: Bearer` header - this is deprecated and only mentioned in legacy documentation.
+
 ---
 
 ## 1. Health Check
@@ -165,7 +167,7 @@ Removes an MQTT client from the system (marks as deleted).
 - **URL:** `/mqtt/{username}`
 - **Method:** `DELETE`
 - **Headers:**
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **URL Params:** `username` (string)
 - **Success Response:**
   - **Code:** `200 OK`
@@ -232,7 +234,7 @@ Retrieves a specific MQTT client by their ID.
 - **URL:** `/mqtt/{id}`
 - **Method:** `GET`
 - **Headers:**
-  - `Authorization: Bearer <API_KEY>`
+  - `x-api-key: <API_KEY>`
 - **URL Params:** `id` (integer) - The user ID
 - **Success Response:**
   - **Code:** `200 OK`

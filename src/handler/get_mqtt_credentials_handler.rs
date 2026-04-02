@@ -11,7 +11,7 @@ pub struct AppState {
 
 #[utoipa::path(
     get,
-    path = "/mqtt/credentials/{username}",
+    path = "/mqtt/users/{username}",
     tag = "MQTT",
     params(
         ("username" = String, Path, description = "Username of the client")

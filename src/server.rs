@@ -278,7 +278,7 @@ pub async fn run_server() -> std::io::Result<()> {
                     .wrap(ApiKeyMiddleware)
                     .route("/create", web::post().to(create_mqtt_handler))
                     .route("/check", web::post().to(login_with_credentials_handler))
-                    .route("/credentials/{username}", web::get().to(get_mqtt_credentials_handler))
+                    .route("/users/{username}", web::get().to(get_mqtt_credentials_handler))
                     .route("/acl", web::post().to(mqtt_acl_handler))
                     .route("/{username}", web::delete().to(get_mqtt_by_id_handler))
                     // Development only

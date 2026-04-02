@@ -27,9 +27,23 @@ A high-performance authentication and authorization service for MQTT clients in 
 Create a `.env` file:
 
 ```bash
-DB_PATH=./rocksdb-data/your_db
+# MySQL Configuration
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=emqx_auth
+
+# Security
 SECRET_KEY=<generate-with: make key>
 API_KEY=<generate-with: make key>
+MQTT_PASS_ENCRYPTION_KEY=<generate-with: make key>
+
+# Optional: MQTT Admin (for MQTT-based user management)
+MQTT_ADMIN_ENABLED=false
+MQTT_BROKER_HOST=localhost
+MQTT_BROKER_PORT=1883
+
 LOG_LEVEL=info
 ```
 
@@ -69,10 +83,14 @@ docker compose up -d
 docker run -d \
   --name auth-plugin \
   -p 5500:5500 \
-  -v ./rocksdb-data:/data \
-  -e DB_PATH=/data/your_db \
+  -e MYSQL_HOST=127.0.0.1 \
+  -e MYSQL_PORT=3306 \
+  -e MYSQL_USER=root \
+  -e MYSQL_PASSWORD=your_password \
+  -e MYSQL_DATABASE=emqx_auth \
   -e SECRET_KEY=<your-secret-key> \
   -e API_KEY=<your-api-key> \
+  -e MQTT_PASS_ENCRYPTION_KEY=<your-encryption-key> \
   -e LOG_LEVEL=info \
   ghcr.io/farismnrr/emqx-auth-service:v0.1.0
 ```
@@ -80,10 +98,8 @@ docker run -d \
 **Or direct execution:**
 
 ```bash
-# Start RocksDB service
-docker compose up -d rocksdb
-
-# Run the application
+# Ensure MySQL is running
+# Then run the application
 cargo run --release
 ```
 
@@ -96,7 +112,7 @@ curl http://localhost:5500/
 
 ## API Endpoints
 
-All endpoints require the `Authorization Bearer` header.
+All endpoints require the `x-api-key` header for authentication.
 
 ### Health Check
 
@@ -116,10 +132,26 @@ Content-Type: application/json
   "is_superuser": false
 }
 
-Response: 201 OK
+Response: 200 OK
 {
   "success": true,
-  "message": "User MQTT created successfully"
+  "message": "User mqtt created successfully"
+}
+```
+
+### Get MQTT Credentials
+
+```
+GET /mqtt/users/{username}
+
+Response: 200 OK
+{
+  "success": true,
+  "message": "Credentials retrieved successfully",
+  "data": {
+    "username": "client_name",
+    "password": "decrypted_password"
+  }
 }
 ```
 
