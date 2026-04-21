@@ -140,7 +140,7 @@ async fn main() -> std::io::Result<()> {
         metrics: Arc::new(metrics),
     });
 
-    info!("🚀 Server running on http://0.0.0.0:5500");
+    info!("🚀 Server running on http://0.0.0.0:5501");
 
     // Clone metrics for shutdown
     let metrics_for_shutdown = Arc::clone(&server_state.metrics);
@@ -192,7 +192,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/jwt", web::post().to(jwt_handler)),
             )
     })
-    .bind(("0.0.0.0", 5500))?
+    .bind(("0.0.0.0", 5501))?
     .run();
 
     let server_handle = server.handle();

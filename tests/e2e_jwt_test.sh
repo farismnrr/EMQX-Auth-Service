@@ -7,7 +7,7 @@
 set -e
 
 # Configuration
-BASE_URL="${BASE_URL:-http://localhost:5500}"
+BASE_URL="${BASE_URL:-http://localhost:5501}"
 API_KEY="${API_KEY:-}"
 MQTT_BROKER="${MQTT_BROKER:-localhost}"
 MQTT_PORT="${MQTT_PORT:-1883}"

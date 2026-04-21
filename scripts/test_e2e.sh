@@ -6,7 +6,7 @@
 # =============================================================================
 
 # Configuration
-BASE_URL="${AUTH_SERVICE_URL:-http://localhost:5500}"
+BASE_URL="${AUTH_SERVICE_URL:-http://localhost:5501}"
 API_KEY="${API_KEY}"
 TEST_PREFIX="e2e_test_$(date +%s)"
 

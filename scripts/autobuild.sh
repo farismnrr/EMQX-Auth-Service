@@ -377,7 +377,7 @@ if [ $? -eq 0 ]; then
     echo "  ├─ Platforms: $BUILD_PLATFORMS"
     echo "  ├─ Base Image: debian:bookworm-slim (Multi-stage)"
     echo "  ├─ Runtime User: service (UID: 1000)"
-    echo "  ├─ Exposed Port: 5500"
+    echo "  ├─ Exposed Port: 5501"
     echo "  ├─ Health Check: Enabled (30s interval)"
     echo "  └─ Architecture: Multi-stage build with buildx"
     echo ""
