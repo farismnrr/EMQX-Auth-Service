@@ -1,126 +1,261 @@
-# 🚀 EMQX Auth Service - Production Setup Guide
+# EMQX Auth Service Production Setup
 
-Dokumen ini menjelaskan cara mengonfigurasi **EMQX Auth Service** dan **EMQX Broker (v5+)** untuk lingkungan produksi menggunakan skema keamanan **AES-256-GCM** dan **JWT**.
+This document describes how to configure and deploy EMQX Auth Service for production environments.
 
----
+## Overview
 
-## 🏗️ 3 Route Utama (EMQX Native)
+EMQX Auth Service provides REST API-based user management and JWT token generation for MQTT client authentication. The service uses PostgreSQL for data persistence and OpenTelemetry for observability.
 
-Service ini menyediakan 3 endpoint khusus yang dirancang untuk berkomunikasi langsung dengan hook HTTP EMQX:
+## Architecture
 
-### 1. `POST /emqx/auth` (Authentication)
-Digunakan oleh EMQX untuk memvalidasi username dan password client saat mencoba terhubung.
-*   **Logika**: Service mengambil ciphertext dari database, mendekripsinya menggunakan kunci AES, dan mencocokkannya dengan password yang dikirim client.
-*   **Response**: 
-    ```json
-    { "result": "allow", "is_superuser": false } // atau "deny"
-    ```
-
-### 2. `POST /emqx/login` (JWT Issuance)
-Endpoint bagi client/aplikasi untuk mendapatkan token JWT.
-*   **Fungsi**: Client mengirim kredensial (plain text), jika valid, service akan memberikan token JWT yang ditandatangani dengan `SECRET_KEY`.
-*   **Response**:
-    ```json
-    { "result": "allow", "token": "eyJhbGci..." }
-    ```
-
-### 3. `POST /emqx/acl` (Authorization)
-Digunakan oleh EMQX untuk mengecek apakah seorang user diizinkan melakukan **Publish** atau **Subscribe** ke suatu topic.
-*   **Aturan Default**: 
-    *   **Superuser**: Akses penuh ke semua topic.
-    *   **Regular User**: Hanya diizinkan mengakses topic dengan prefix `users/{username}/`.
-*   **Response**:
-    ```json
-    { "result": "allow" } // atau "deny"
-    ```
-
----
-
-## ⚙️ Konfigurasi Environment
-
-Pastikan file `.env` di produksi memiliki variabel berikut:
-
-```bash
-# Kunci untuk menandatangani JWT (Sangat Rahasia)
-SECRET_KEY=your_super_secret_jwt_key
-
-# Kunci 64-karakter hex untuk enkripsi AES-256-GCM (Password di DB)
-MQTT_PASS_ENCRYPTION_KEY=64_hex_characters_here
-
-# API Key untuk mengamankan komunikasi EMQX -> Auth Service
-API_KEY=your_internal_api_key
+```
+┌─────────────────┐      REST API        ┌──────────────────────┐
+│  EMQX Broker    │ ◄──────────────────► │  EMQX Auth Service   │
+│  (JWT Auth)     │    JWT Token         │  (Port 5500)         │
+└─────────────────┘                      └──────────────────────┘
+                                                │
+                                                ▼
+                                         ┌─────────────────┐
+                                         │   PostgreSQL    │
+                                         │   Database      │
+                                         └─────────────────┘
 ```
 
----
+## Authentication Flow
 
-## 🛠️ Konfigurasi EMQX Broker (v5.x)
+### Device Connection Flow
 
-Untuk performa dan keamanan terbaik di produksi, gunakan konfigurasi **HOCON**. Anda bisa memuat konfigurasi ini melalui Dashboard (Access Control) atau via CLI (`emqx_ctl conf load`).
+1. **Device requests JWT token** from backend or directly from auth service
+2. **Auth service validates** device exists in database
+3. **Auth service issues JWT** token (24-hour expiration)
+4. **Device connects to EMQX** using JWT token as password
+5. **EMQX validates JWT** using configured secret key
 
-### 1. Authentication Chain (JWT & HTTP)
-Susun agar EMQX mengecek JWT terlebih dahulu, baru kemudian HTTP Auth.
+### Backend User Management
+
+Backend systems manage MQTT users via REST API:
+- `POST /mqtt/create` - Create new MQTT user
+- `GET /mqtt` - List all MQTT users
+- `DELETE /mqtt/{username}` - Remove MQTT user
+- `POST /mqtt/jwt` - Generate JWT token for user
+
+## Required Environment Variables
+
+### Database Configuration
+
+```env
+# Option 1: Connection string (recommended)
+DATABASE_URL=postgresql://user:password@host:5432/emqx_auth
+
+# Option 2: Individual parameters
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=emqx_auth
+DB_USER=postgres
+DB_PASSWORD=your_secure_password
+DB_SCHEMA=public
+
+# Optional: Connection pool settings
+DB_MAX_CONNECTIONS=10
+DB_CONNECT_TIMEOUT=5000
+DB_IDLE_TIMEOUT=60000
+```
+
+### Authentication & Security
+
+```env
+# Required: Secret key for JWT signing (SHA256 hash)
+# Generate with: openssl rand -hex 32
+SECRET_KEY=<64-character-hex-string>
+
+# Required: API key for REST endpoint authentication
+# Generate with: openssl rand -hex 32
+API_KEY=<64-character-hex-string>
+```
+
+### Logging & Performance
+
+```env
+# Optional: Log level (default: info)
+RUST_LOG=info
+
+# Optional: Rate limit for MQTT auth operations (default: 100 rpm)
+MQTT_AUTH_RATE_LIMIT=100
+```
+
+### OpenTelemetry (Optional)
+
+```env
+# OTLP endpoint for traces and metrics
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+
+# Service name for telemetry
+OTEL_SERVICE_NAME=emqx-auth-service
+```
+
+## Production Deployment
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+
+services:
+  emqx-auth-service:
+    image: ghcr.io/farismnrr/emqx-auth-service:latest
+    ports:
+      - "5500:5500"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/emqx_auth
+      - SECRET_KEY=${SECRET_KEY}
+      - API_KEY=${API_KEY}
+      - RUST_LOG=info
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=emqx-auth-service
+    depends_on:
+      - postgres
+    networks:
+      - internal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=emqx_auth
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    driver: bridge
+```
+
+### EMQX Configuration
+
+Configure EMQX to use JWT authentication:
 
 ```hocon
-authentication = [
-  {
-    mechanism = "jwt"
-    use_jwks = false
-    algorithm = "hmac-based"
-    secret = "PASTE_YOUR_SECRET_KEY_HERE"
+# /etc/emqx/emqx.conf
+authentication {
+  backend = "jwt"
+  jwt {
+    algorithm = "hs256"
+    secret = "${SECRET_KEY}"  # Same as auth service
     from = "password"
-    enable = true
-  },
-  {
-    mechanism = "password_based"
-    backend = "http"
-    enable = true
-    method = "post"
-    url = "http://emqx-auth-service:5500/emqx/auth"
-    headers {
-      "Content-Type" = "application/json"
-      "x-api-key" = "PASTE_YOUR_API_KEY_HERE"
-    }
-    body {
-      username = "${username}"
-      password = "${password}"
-    }
   }
-]
-```
-
-### 2. Authorization (ACL)
-Pastikan `no_match = deny` untuk keamanan maksimal.
-
-```hocon
-authorization {
-  no_match = "deny"
-  cache { enable = true, ttl = "1m" }
-  sources = [
-    {
-      type = "http"
-      enable = true
-      method = "post"
-      url = "http://emqx-auth-service:5500/emqx/acl"
-      headers {
-        "Content-Type" = "application/json"
-        "x-api-key" = "PASTE_YOUR_API_KEY_HERE"
-      }
-      body {
-        username = "${username}"
-        clientid = "${clientid}"
-        topic = "${topic}"
-        action = "${action}"
-      }
-    }
-  ]
 }
 ```
 
----
+## Production Hardening
 
-## 🔒 Security Best Practices
+### Network Security
 
-1.  **Localhost Binding**: Selalu jalankan Auth Service di port lokal (`127.0.0.1:5505`) atau di dalam Docker Network internal. Jangan expose port 5500/5505 ke internet publik.
-2.  **Key Rotation**: Jika `MQTT_PASS_ENCRYPTION_KEY` bocor, Anda harus mengenkripsi ulang seluruh password di database. Jaga kunci ini dengan sangat ketat.
-3.  **Audit Logs**: Cek logs secara berkala jika terjadi `Internal Server Error`. Detail kegagalan enkripsi/dekripsi hanya muncul di server logs, tidak dikirim ke client API.
-4.  **Superuser**: Gunakan field `is_superuser: true` di database hanya untuk sistem backend atau admin IoTNet agar memiliki akses kontrol penuh tanpa batasan topic.
+1. **Bind to internal network only** - Do not expose auth service publicly
+2. **Use private Docker network** - Isolate database and auth service
+3. **Restrict API access** - Only backend services should access REST API
+4. **Enable TLS** - Use HTTPS for all REST API communication
+
+### Secret Management
+
+1. **Use environment variables** - Never hardcode secrets in config files
+2. **Rotate keys regularly** - Establish key rotation schedule
+3. **Use secret manager** - Consider HashiCorp Vault, AWS Secrets Manager
+4. **Restrict access** - Limit who can access SECRET_KEY and API_KEY
+
+### Database Security
+
+1. **Use strong passwords** - Generate secure database credentials
+2. **Restrict permissions** - Database user should only access emqx_auth schema
+3. **Enable SSL** - Use encrypted database connections
+4. **Regular backups** - Implement automated backup strategy
+
+### Monitoring & Observability
+
+1. **Enable OpenTelemetry** - Export traces and metrics
+2. **Monitor error rates** - Alert on authentication failures
+3. **Track response times** - Monitor API latency
+4. **Log aggregation** - Centralize logs for analysis
+
+## Validation Checklist
+
+Before going to production:
+
+- [ ] Database connection established and tested
+- [ ] SECRET_KEY generated and configured (64 hex chars)
+- [ ] API_KEY generated and configured (64 hex chars)
+- [ ] Health check endpoint responds: `GET /`
+- [ ] User creation works: `POST /mqtt/create`
+- [ ] JWT generation works: `POST /mqtt/jwt`
+- [ ] EMQX accepts JWT tokens for MQTT connection
+- [ ] OpenTelemetry traces visible in backend
+- [ ] API endpoints not publicly accessible
+- [ ] Database backups configured
+- [ ] Monitoring and alerting configured
+
+## Incident Response
+
+### JWT Token Issues
+
+If devices cannot connect:
+1. Check JWT token expiration (24 hours)
+2. Verify SECRET_KEY matches EMQX configuration
+3. Check auth service logs for token generation errors
+4. Test JWT endpoint manually: `POST /mqtt/jwt`
+
+### Database Connection Failures
+
+If auth service cannot connect to database:
+1. Check DATABASE_URL format and credentials
+2. Verify PostgreSQL is running and accessible
+3. Check network connectivity between containers
+4. Review database logs for connection errors
+
+### Key Rotation Procedure
+
+To rotate SECRET_KEY:
+1. Generate new SECRET_KEY
+2. Update EMQX configuration first
+3. Restart EMQX broker
+4. Update auth service configuration
+5. Restart auth service
+6. All existing JWT tokens will be invalidated
+
+To rotate API_KEY:
+1. Generate new API_KEY
+2. Update all backend services using the API
+3. Update auth service configuration
+4. Restart auth service
+5. Test all API endpoints
+
+## Performance Tuning
+
+### Connection Pool
+
+Adjust database connection pool based on load:
+```env
+DB_MAX_CONNECTIONS=20        # Increase for high load
+DB_CONNECT_TIMEOUT=10000     # Increase for slow networks
+DB_IDLE_TIMEOUT=120000       # Increase for bursty traffic
+```
+
+### Rate Limiting
+
+Adjust rate limit based on expected throughput:
+```env
+MQTT_AUTH_RATE_LIMIT=500     # Increase for high-volume deployments
+```
+
+## Support
+
+For issues or questions:
+- Check application logs: `docker logs <container>`
+- Review OpenTelemetry traces
+- Create an issue in the repository

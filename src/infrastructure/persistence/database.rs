@@ -8,7 +8,7 @@ use crate::config::DatabaseConfig;
 
 /// Initialize database connection
 pub async fn init_db(config: &DatabaseConfig) -> Result<DatabaseConnection, DbErr> {
-    info!("📁 Connecting to database ({:?})", config.db_type);
+    info!("📁 Connecting to PostgreSQL database");
 
     let mut opt = ConnectOptions::new(config.connection_string.clone());
     opt.max_connections(config.max_connections)

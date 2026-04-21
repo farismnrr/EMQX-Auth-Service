@@ -26,7 +26,7 @@ pub enum RepositoryError {
 /// - Low-level modules (database) implement this interface
 #[async_trait]
 pub trait MqttUserRepository: Send + Sync {
-    async fn find_by_id(&self, id: i64) -> Result<Option<MqttUser>, RepositoryError>;
+    async fn find_by_id(&self, id: i32) -> Result<Option<MqttUser>, RepositoryError>;
     async fn find_by_username(&self, username: &str) -> Result<Option<MqttUser>, RepositoryError>;
     async fn find_all(&self, limit: u32, offset: u32) -> Result<Vec<MqttUser>, RepositoryError>;
     async fn count(&self) -> Result<u64, RepositoryError>;

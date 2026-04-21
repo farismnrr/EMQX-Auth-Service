@@ -11,11 +11,8 @@ Complete API documentation for the EMQX Auth Service.
    - [Health Check](#1-health-check)
    - [Create MQTT User](#2-create-mqtt-user)
    - [List MQTT Users](#3-list-mqtt-users)
-   - [Get User by ID](#4-get-user-by-id)
-   - [Get User by Username](#5-get-user-by-username)
-   - [Delete MQTT User](#6-delete-mqtt-user)
-   - [EMQX Auth](#7-emqx-auth)
-   - [EMQX ACL](#8-emqx-acl)
+   - [Delete MQTT User](#4-delete-mqtt-user)
+   - [Generate JWT Token](#5-generate-jwt-token)
 3. [Schemas](#schemas)
 
 ---
@@ -25,6 +22,14 @@ Complete API documentation for the EMQX Auth Service.
 All endpoints (except Health Check) require authentication via API Key.
 
 **Header:** `x-api-key: <API_KEY>`
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "success": false,
+  "message": "Unauthorized"
+}
+```
 
 ---
 
@@ -67,14 +72,26 @@ Registers a new MQTT user in the system.
   ```json
   {
     "success": true,
-    "message": "User mqtt created successfully",
+    "message": "User created successfully",
     "data": null
   }
   ```
 - **Error Responses:**
   - `400 Bad Request` - Invalid input (empty username/password, invalid JSON)
+    ```json
+    {
+      "success": false,
+      "message": "Validation error: username cannot be empty"
+    }
+    ```
   - `401 Unauthorized` - Missing or invalid API key
   - `409 Conflict` - Username already exists
+    ```json
+    {
+      "success": false,
+      "message": "User already exists"
+    }
+    ```
   - `500 Internal Server Error` - Database error
 
 **Example:**
@@ -132,75 +149,7 @@ curl "http://localhost:5500/mqtt?limit=10&offset=0" \
 
 ---
 
-### 4. Get User by ID
-
-Retrieves a specific MQTT user by their ID.
-
-- **URL:** `/mqtt/{id}`
-- **Method:** `GET`
-- **Authentication:** Required (`x-api-key`)
-- **Path Parameters:**
-  - `id` - The user ID (integer)
-- **Success Response (200):**
-  ```json
-  {
-    "success": true,
-    "message": "User MQTT retrieved successfully",
-    "data": {
-      "id": 1,
-      "username": "device_001",
-      "is_superuser": false
-    }
-  }
-  ```
-- **Error Responses:**
-  - `401 Unauthorized` - Missing or invalid API key
-  - `404 Not Found` - User not found
-  - `500 Internal Server Error` - Database error
-
-**Example:**
-```bash
-curl http://localhost:5500/mqtt/1 \
-  -H "x-api-key: YOUR_API_KEY"
-```
-
----
-
-### 5. Get User by Username
-
-Retrieves a specific MQTT user by their username.
-
-- **URL:** `/mqtt/users/{username}`
-- **Method:** `GET`
-- **Authentication:** Required (`x-api-key`)
-- **Path Parameters:**
-  - `username` - The username (string)
-- **Success Response (200):**
-  ```json
-  {
-    "success": true,
-    "message": "User MQTT retrieved successfully",
-    "data": {
-      "id": 1,
-      "username": "device_001",
-      "is_superuser": false
-    }
-  }
-  ```
-- **Error Responses:**
-  - `401 Unauthorized` - Missing or invalid API key
-  - `404 Not Found` - User not found
-  - `500 Internal Server Error` - Database error
-
-**Example:**
-```bash
-curl http://localhost:5500/mqtt/users/device_001 \
-  -H "x-api-key: YOUR_API_KEY"
-```
-
----
-
-### 6. Delete MQTT User
+### 4. Delete MQTT User
 
 Removes an MQTT user from the system.
 
@@ -213,13 +162,19 @@ Removes an MQTT user from the system.
   ```json
   {
     "success": true,
-    "message": "User mqtt deleted successfully",
+    "message": "User deleted successfully",
     "data": null
   }
   ```
 - **Error Responses:**
   - `401 Unauthorized` - Missing or invalid API key
   - `404 Not Found` - User not found
+    ```json
+    {
+      "success": false,
+      "message": "User not found"
+    }
+    ```
   - `500 Internal Server Error` - Database error
 
 **Example:**
@@ -230,76 +185,79 @@ curl -X DELETE http://localhost:5500/mqtt/device_001 \
 
 ---
 
-### 7. EMQX Auth
+### 5. Generate JWT Token
 
-EMQX HTTP authentication endpoint. Returns result in EMQX native format.
+Generates a JWT token for the specified user. The token can be used as the password when connecting to the EMQX MQTT broker.
 
-- **URL:** `/emqx/auth`
+- **URL:** `/mqtt/jwt`
 - **Method:** `POST`
-- **Authentication:** None (called by EMQX broker)
+- **Authentication:** Required (`x-api-key`)
 - **Request Body:**
   ```json
   {
-    "username": "device_001",
-    "password": "secure_password"
+    "username": "device_001"
   }
   ```
-- **Success Response (200) - Allow:**
+- **Success Response (200):**
   ```json
   {
-    "result": "allow",
-    "is_superuser": false
+    "success": true,
+    "message": "JWT token generated successfully",
+    "data": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "expires_at": "2026-03-20T12:00:00Z"
+    }
   }
   ```
-- **Success Response (200) - Deny:**
-  ```json
-  {
-    "result": "deny"
-  }
-  ```
+- **Error Responses:**
+  - `400 Bad Request` - Invalid input (empty username)
+    ```json
+    {
+      "success": false,
+      "message": "Validation error: username cannot be empty"
+    }
+    ```
+  - `401 Unauthorized` - Missing or invalid API key
+  - `404 Not Found` - User not found
+    ```json
+    {
+      "success": false,
+      "message": "User not found: device_001"
+    }
+    ```
+  - `500 Internal Server Error` - Server configuration error (invalid SECRET_KEY)
+
+**JWT Token Configuration:**
+- Algorithm: HS256 (HMAC-SHA256)
+- Issuer: `broker.i-ot.net`
+- Audience: `mqtt`
+- Expiration: 24 hours
+- Secret: Configured via `SECRET_KEY` environment variable
 
 **Example:**
 ```bash
-curl -X POST http://localhost:5500/emqx/auth \
+curl -X POST http://localhost:5500/mqtt/jwt \
   -H "Content-Type: application/json" \
-  -d '{"username":"device_001","password":"secure_password"}'
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{"username":"device_001"}'
 ```
 
----
+**Usage with EMQX:**
+```python
+import paho.mqtt.client as mqtt
 
-### 8. EMQX ACL
+# Get JWT token from auth service
+token_response = requests.post(
+    "http://localhost:5500/mqtt/jwt",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    json={"username": "client_001"}
+)
+jwt_token = token_response.json()["data"]["token"]
 
-EMQX HTTP authorization (ACL) endpoint. Returns result in EMQX native format.
-
-- **URL:** `/emqx/acl`
-- **Method:** `POST`
-- **Authentication:** None (called by EMQX broker)
-- **Request Body:**
-  ```json
-  {
-    "username": "device_001",
-    "topic": "sensor/data",
-    "action": "publish"
-  }
-  ```
-- **Success Response (200) - Allow:**
-  ```json
-  {
-    "result": "allow"
-  }
-  ```
-- **Success Response (200) - Deny:**
-  ```json
-  {
-    "result": "deny"
-  }
-  ```
-
-**Example:**
-```bash
-curl -X POST http://localhost:5500/emqx/acl \
-  -H "Content-Type: application/json" \
-  -d '{"username":"device_001","topic":"sensor/data","action":"publish"}'
+# Connect to EMQX using JWT as password
+client = mqtt.Client(client_id="client_001")
+client.username_pw_set("client_001", jwt_token)
+client.connect("broker.i-ot.net", 1883)
 ```
 
 ---
@@ -315,59 +273,32 @@ curl -X POST http://localhost:5500/emqx/acl \
   "properties": {
     "username": { "type": "string" },
     "password": { "type": "string" },
-    "is_superuser": { "type": "boolean" }
+    "is_superuser": { "type": "boolean", "default": false }
   }
 }
 ```
 
-### EmqxAuthRequest
+### JwtRequest
 
 ```json
 {
   "type": "object",
-  "required": ["username", "password"],
+  "required": ["username"],
   "properties": {
-    "username": { "type": "string" },
-    "password": { "type": "string" }
+    "username": { "type": "string" }
   }
 }
 ```
 
-### EmqxAuthResponse
+### JwtResponseData
 
 ```json
 {
   "type": "object",
-  "required": ["result"],
+  "required": ["token", "expires_at"],
   "properties": {
-    "result": { "type": "string", "enum": ["allow", "deny"] },
-    "is_superuser": { "type": ["boolean", "null"] }
-  }
-}
-```
-
-### EmqxAclRequest
-
-```json
-{
-  "type": "object",
-  "required": ["username", "topic"],
-  "properties": {
-    "username": { "type": "string" },
-    "topic": { "type": "string" },
-    "action": { "type": "string", "enum": ["publish", "subscribe"] }
-  }
-}
-```
-
-### EmqxAclResponse
-
-```json
-{
-  "type": "object",
-  "required": ["result"],
-  "properties": {
-    "result": { "type": "string", "enum": ["allow", "deny"] }
+    "token": { "type": "string" },
+    "expires_at": { "type": "string", "format": "date-time" }
   }
 }
 ```
@@ -386,7 +317,25 @@ curl -X POST http://localhost:5500/emqx/acl \
 }
 ```
 
-### ErrorResponse
+### UserListDTO
+
+```json
+{
+  "type": "object",
+  "required": ["users", "total", "limit", "offset"],
+  "properties": {
+    "users": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/UserDTO" }
+    },
+    "total": { "type": "integer" },
+    "limit": { "type": "integer" },
+    "offset": { "type": "integer" }
+  }
+}
+```
+
+### SuccessResponse<T>
 
 ```json
 {
@@ -394,6 +343,20 @@ curl -X POST http://localhost:5500/emqx/acl \
   "required": ["success", "message"],
   "properties": {
     "success": { "type": "boolean" },
+    "message": { "type": "string" },
+    "data": { "type": ["object", "array", "null"] }
+  }
+}
+```
+
+### ErrorResponse
+
+```json
+{
+  "type": "object",
+  "required": ["success", "message"],
+  "properties": {
+    "success": { "type": "boolean", "enum": [false] },
     "message": { "type": "string" }
   }
 }
@@ -416,11 +379,15 @@ This service is instrumented with OpenTelemetry for observability.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint | `http://localhost:4317` |
 | `OTEL_SERVICE_NAME` | Service name for telemetry | `emqx-auth-service` |
 
+For detailed integration instructions, see [OPENTELEMETRY_GUIDE.md](OPENTELEMETRY_GUIDE.md).
+
 ---
 
-## Interactive API Docs
+## Interactive API Documentation
 
 Access the interactive API documentation:
 
 - **Scalar UI:** http://localhost:5500/openapi
 - **OpenAPI JSON:** http://localhost:5500/api-docs/openapi.json
+
+These endpoints provide the most up-to-date API documentation, automatically generated from the code.

@@ -1,8 +1,8 @@
 //! Response DTOs
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use serde_json::Value;
+use utoipa::ToSchema;
 
 /// Generic success response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -62,7 +62,7 @@ impl ErrorResponse {
 /// User DTO
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserDTO {
-    pub id: i64,
+    pub id: i32,
     pub username: String,
     pub password: Option<String>,
     pub is_superuser: bool,

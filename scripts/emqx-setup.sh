@@ -1,7 +1,7 @@
 #!/bin/bash
 #===============================================================================
-# EMQX Ultra-Robust Auto-Configuration Script
-# (Self-Handling Dashboard & Restricted Listeners)
+# EMQX Auto-Configuration Script (Tunneling Server Configuration)
+# Matches production config: SSL (8883), WSS (8084), Dashboard (18083)
 #===============================================================================
 
 # Load .env if it exists
@@ -11,10 +11,14 @@ fi
 
 EMQX_DASHBOARD_URL="http://localhost:18083"
 EMQX_ADMIN_USER="${EMQX_ADMIN_USER:-admin}"
-EMQX_CONTAINER_NAME="${EMQX_CONTAINER_NAME:-emqx-broker}"
+EMQX_CONTAINER_NAME="${EMQX_CONTAINER_NAME:-dev-emqx}"
 # IMPORTANT: Use internal Docker port 5500 for EMQX-to-AuthService communication
 AUTH_SERVICE_URL="${AUTH_SERVICE_URL:-http://emqx-auth-service:5500}"
 API_KEY="${API_KEY}"
+
+# Certificate paths (matching tunneling server)
+SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/emqx/certs/broker.i-ot.net.crt}"
+SSL_KEY_FILE="${SSL_KEY_FILE:-/etc/emqx/certs/broker.i-ot.net.key}"
 
 log() { echo -e "[\033[0;34mEMQX Setup\033[0m] $(date '+%Y-%m-%d %H:%M:%S') - $1"; }
 warn() { echo -e "[\033[0;33mWARN\033[0m] $1"; }
@@ -53,7 +57,7 @@ for PASS in "${PASSWORDS[@]}"; do
     RESPONSE=$(curl -s -X POST "${EMQX_DASHBOARD_URL}/api/v5/login" \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"${EMQX_ADMIN_USER}\",\"password\":\"${PASS}\"}")
-    
+
     TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
     if [ -n "$TOKEN" ]; then
         log "Authenticated successfully."
@@ -73,11 +77,16 @@ fi
 
 [ -z "$TOKEN" ] && error "Final authentication attempt failed. Check credentials."
 
-# 4. Restrict Listeners (Only 1883 and 8083)
-log "Cleaning up unnecessary listeners (SSL 8883, WSS 8084)..."
-curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/ssl:default/enable/false" -H "Authorization: Bearer ${TOKEN}" > /dev/null
-curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/wss:default/enable/false" -H "Authorization: Bearer ${TOKEN}" > /dev/null
-log "Internal listeners restricted."
+# 4. Configure SSL/TLS Listeners (Matching Tunneling Server)
+log "Configuring SSL listener on port 8883..."
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/ssl:default/enable/true" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/ssl:default/bind/8883" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+
+log "Configuring WSS listener on port 8084..."
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/wss:default/enable/true" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+curl -s -X PUT "${EMQX_DASHBOARD_URL}/api/v5/listeners/wss:default/bind/8084" -H "Authorization: Bearer ${TOKEN}" > /dev/null
+
+log "Secure listeners (SSL 8883, WSS 8084) enabled."
 
 # 5. Configure HTTP Authentication
 log "Configuring HTTP Authentication..."
@@ -134,13 +143,15 @@ else
     log "Authorization configured ✅"
 fi
 
-# 7. Final Security Cleanup (Disable Dashboard)
-log "Disabling Dashboard listener (Full CLI mode)..."
-docker exec "$EMQX_CONTAINER_NAME" sh -c "echo 'dashboard.listeners.http.bind = 0' > /tmp/setup_dash_off.conf"
-docker exec "$EMQX_CONTAINER_NAME" emqx_ctl conf load /tmp/setup_dash_off.conf > /dev/null
+# 7. Keep Dashboard enabled (matching tunneling server)
+log "Dashboard remains enabled on port 18083 (matching tunneling server config)."
 
 log "============================================"
 log "EMQX auto-configuration completed!"
-log "Listeners Active: 1883 (MQTT), 8083 (WS)"
-log "Dashboard Status: DISABLED"
+log "Listeners Active:"
+log "  - 1883 (MQTT)"
+log "  - 8083 (WebSocket)"
+log "  - 8883 (SSL/TLS)"
+log "  - 8084 (WSS)"
+log "Dashboard Status: ENABLED on 18083"
 log "============================================"

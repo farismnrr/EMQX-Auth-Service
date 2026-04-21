@@ -1,21 +1,21 @@
 # 📊 OpenTelemetry Integration Guide
 
-**EMQX Auth Service** now uses **OpenTelemetry v0.31** for standardized logging, tracing, and metrics.
+**EMQX Auth Service** uses **OpenTelemetry** for standardized logging, tracing, and metrics.
 
 ---
 
 ## 🎯 OVERVIEW
 
-The service now implements the **OpenTelemetry standard v0.31** for:
+The service implements **OpenTelemetry** for:
 - ✅ **Structured Logging** - JSON-formatted logs with trace context
 - ✅ **Distributed Tracing** - End-to-end request tracing
-- ✅ **Metrics** - Performance and error metrics (stub implementation)
+- ✅ **Metrics** - Performance and error metrics
 
 All telemetry data is exported via **OTLP (OpenTelemetry Protocol)** to your observability backend.
 
-**Last Updated:** March 2026
-**OpenTelemetry Version:** 0.31.0
-**tracing-opentelemetry Version:** 0.32.1
+**Last Updated:** March 2026  
+**OpenTelemetry Version:** 0.31+  
+**tracing-opentelemetry Version:** 0.32+
 
 ---
 
@@ -230,28 +230,21 @@ volumes:
 
 ### Log Format
 
-All logs are now **JSON-formatted** with OpenTelemetry context:
+All logs are **JSON-formatted** with OpenTelemetry context:
 
 ```json
 {
   "timestamp": "2026-03-14T10:30:00.123456Z",
   "level": "INFO",
-  "target": "emqx_auth_service::services::create_mqtt_service",
-  "message": "User MQTT created successfully",
+  "target": "emqx_auth_service::presentation::handlers::rest::create_user_handler",
+  "message": "User created successfully",
+  "username": "device_001",
   "span": {
-    "username": "device_001"
+    "trace_id": "5bd66ef5095ebccd148dfa533aaeb980",
+    "span_id": "6c292ca89b5bd37a"
   },
-  "spans": [
-    {
-      "name": "POST /mqtt/create",
-      "trace_id": "5bd66ef5095ebccd148dfa533aaeb980",
-      "span_id": "6c292ca89b5bd37a"
-    }
-  ],
   "thread": "actix-rt|system:0|arbiter:1",
-  "threadId": "1",
-  "file": "src/services/create_mqtt_service.rs",
-  "line": 42
+  "threadId": "1"
 }
 ```
 
@@ -292,54 +285,37 @@ info!(
 
 ## 🔍 DISTRIBUTED TRACING
 
+### Automatic Instrumentation
+
+The service uses automatic instrumentation for HTTP requests:
+
+```rust
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    // OpenTelemetry initialized in main()
+    // All HTTP requests are automatically traced
+}
+```
+
 ### Manual Instrumentation
 
 ```rust
 use tracing::{instrument, Span};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 #[instrument(skip(self), fields(username = %dto.username))]
-pub async fn create_mqtt(&self, dto: CreateMqttDTO) -> Result<bool, MqttServiceError> {
+pub async fn create_user(&self, dto: CreateUserDTO) -> Result<(), Error> {
     // Add custom attributes to span
     Span::current().record("is_superuser", dto.is_superuser);
-    
+
     // Add event to trace
     Span::current().add_event_with_timestamp(
         "User validation passed",
         Some(std::time::SystemTime::now()),
-        vec![KeyValue::new("validation.duration_ms", 10)]
+        vec![opentelemetry::KeyValue::new("validation.duration_ms", 10)]
     );
-    
+
     // ... business logic
 }
-```
-
-### Trace Context Propagation
-
-```rust
-// Extract trace context from HTTP headers
-use opentelemetry::global;
-use opentelemetry::propagation::{Extractor, TextMapPropagator};
-
-struct HeaderExtractor<'a>(&'a actix_web::HttpRequest);
-
-impl<'a> Extractor for HeaderExtractor<'a> {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.headers().get(key).and_then(|v| v.to_str().ok())
-    }
-    
-    fn keys(&self) -> Vec<&str> {
-        self.0.headers().keys().map(|k| k.as_str()).collect()
-    }
-}
-
-let propagator = global::tracer_provider()
-    .versioned_tracer("opentelemetry")
-    .propagator();
-let parent_cx = propagator.extract(&HeaderExtractor(&req));
-
-// Set parent context
-tracing::Span::current().set_parent(parent_cx);
 ```
 
 ---
@@ -357,35 +333,7 @@ tracing::Span::current().set_parent(parent_cx);
 | `db_operations_total` | Counter | Database operations |
 | `db_operation_duration_seconds` | Histogram | DB operation duration |
 
-### Custom Metrics
-
-```rust
-use opentelemetry::global;
-use opentelemetry::metrics::{Counter, Histogram};
-
-// Create meter
-let meter = global::meter("emqx-auth-service");
-
-// Create counter
-let request_counter: Counter<u64> = meter
-    .u64_counter("auth_operations_total")
-    .with_description("Total authentication operations")
-    .init();
-
-// Record metric
-request_counter.add(1, &[KeyValue::new("operation", "create_user")]);
-
-// Create histogram
-let duration_histogram: Histogram<f64> = meter
-    .f64_histogram("auth_operation_duration_seconds")
-    .with_description("Authentication operation duration")
-    .init();
-
-// Record duration
-duration_histogram.record(duration.as_secs_f64(), &[
-    KeyValue::new("operation", "create_user")
-]);
-```
+Metrics are exported via OTLP to your metrics backend (e.g., Prometheus via OpenTelemetry Collector).
 
 ---
 
@@ -396,12 +344,12 @@ duration_histogram.record(duration.as_secs_f64(), &[
 ```rust
 // ✅ Good: Automatic span creation
 #[instrument(skip(self), fields(username = %dto.username))]
-pub async fn create_user(&self, dto: CreateMqttDTO) -> Result<(), Error> {
+pub async fn create_user(&self, dto: CreateUserDTO) -> Result<(), Error> {
     // ...
 }
 
 // ❌ Bad: Manual span management
-pub async fn create_user(&self, dto: CreateMqttDTO) -> Result<(), Error> {
+pub async fn create_user(&self, dto: CreateUserDTO) -> Result<(), Error> {
     let span = tracing::span!(tracing::Level::INFO, "create_user").entered();
     // ...
 }
@@ -415,13 +363,13 @@ pub async fn create_user(&self, dto: CreateMqttDTO) -> Result<(), Error> {
     username = %dto.username,
     is_superuser = dto.is_superuser
 ))]
-pub async fn create_user(&self, dto: CreateMqttDTO) -> Result<(), Error> {
+pub async fn create_user(&self, dto: CreateUserDTO) -> Result<(), Error> {
     // ...
 }
 
 // ❌ Bad: No context
 #[instrument(skip(self))]
-pub async fn create_user(&self, dto: CreateMqttDTO) -> Result<(), Error> {
+pub async fn create_user(&self, dto: CreateUserDTO) -> Result<(), Error> {
     // ...
 }
 ```

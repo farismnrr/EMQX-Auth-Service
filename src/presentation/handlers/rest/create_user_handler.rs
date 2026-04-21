@@ -5,7 +5,7 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::application::{CreateUserUseCase, ErrorResponse, SuccessResponse, SuccessResponseJson};
-use crate::infrastructure::{EncryptionAdapter, MqttUserRepositoryImpl};
+use crate::infrastructure::MqttUserRepositoryImpl;
 use crate::utils::map_internal_error;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -17,13 +17,13 @@ pub struct CreateUserRequest {
 }
 
 pub struct CreateUserAppState {
-    pub use_case: CreateUserUseCase<MqttUserRepositoryImpl, EncryptionAdapter>,
+    pub use_case: CreateUserUseCase<MqttUserRepositoryImpl>,
 }
 
 #[utoipa::path(
     post,
     path = "/mqtt/create",
-    tag = "MQTT",
+    tag = "Users",
     request_body = CreateUserRequest,
     security(("api_key" = [])),
     responses(
@@ -35,7 +35,7 @@ pub struct CreateUserAppState {
         (status = 400, description = "Validation error", body = ErrorResponse,
             example = json!({
                 "success": false,
-                "message": "Validation error: username is required"
+                "message": "Validation error: username cannot be empty"
             })),
         (status = 409, description = "User already exists", body = ErrorResponse,
             example = json!({

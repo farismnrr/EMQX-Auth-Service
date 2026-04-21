@@ -3,14 +3,10 @@
 //! Metrics are handled in separate metrics module
 
 use log::info;
-use opentelemetry::{global, KeyValue};
 use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::{global, KeyValue};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{
-    propagation::TraceContextPropagator,
-    trace::SdkTracerProvider,
-    Resource,
-};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider, Resource};
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};

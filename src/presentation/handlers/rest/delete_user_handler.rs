@@ -13,7 +13,7 @@ pub struct DeleteUserAppState {
 #[utoipa::path(
     delete,
     path = "/mqtt/{username}",
-    tag = "MQTT",
+    tag = "Users",
     params(
         ("username" = String, Path, description = "Username of the user to delete")
     ),

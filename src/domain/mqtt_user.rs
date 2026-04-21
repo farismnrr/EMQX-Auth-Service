@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use chrono::{DateTime, Utc};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 /// MQTT User entity
@@ -10,12 +10,12 @@ use serde::{Deserialize, Serialize};
 /// Represents a user in the MQTT authentication system.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MqttUser {
-    pub id: i64,
+    pub id: i32,
     pub username: String,
-    pub password_ciphertext: String,
+    pub password: String,
     pub is_superuser: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
 impl MqttUser {

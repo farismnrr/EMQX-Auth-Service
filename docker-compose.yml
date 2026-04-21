@@ -1,74 +1,29 @@
 services:
   ##==========================================================================
-  ## EMQX MQTT Broker
-  ##==========================================================================
-  emqx:
-    image: emqx/emqx:5.8.0
-    container_name: emqx-broker
-    restart: unless-stopped
-    networks:
-      - iotnet-dev
-    ports:
-      - "1883:1883"
-      - "8083:8083"
-      ## SSL and WSS ports removed for security
-    volumes:
-      - ./scripts/emqx-setup.sh:/opt/emqx/emqx-setup.sh:ro
-      - emqx_data:/opt/emqx/data
-      - emqx_logs:/opt/emqx/log
-    environment:
-      EMQX_NAME: "emqx"
-      EMQX_HOST: "0.0.0.0"
-      ## Disable Dashboard listener by default for "Full CLI" approach
-      EMQX_DASHBOARD__LISTENERS__HTTP__BIND: "0"
-      AUTH_SERVICE_URL: "http://emqx-auth-service:5500"
-      API_KEY: "${API_KEY}"
-    healthcheck:
-      test: ["CMD", "emqx_ctl", "status"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    depends_on:
-      emqx-auth-service:
-        condition: service_healthy
-
-  ##==========================================================================
-  ## EMQX Auth Service
+  ## EMQX Auth Service (REST API only - connect to localhost PostgreSQL)
   ##==========================================================================
   emqx-auth-service:
     image: ghcr.io/farismnrr/emqx-auth-service:latest
     container_name: emqx-auth-service
-    pull_policy: if_not_present
+    pull_policy: always
     restart: unless-stopped
+    network_mode: host
     ports:
       - "5505:5500"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - iotnet-dev
     user: "0:0"
     volumes:
       - emqx_auth_data:/app/data
     environment:
-      LOG_LEVEL: ${LOG_LEVEL}
+      RUST_LOG: ${RUST_LOG}
       SECRET_KEY: ${SECRET_KEY}
       API_KEY: ${API_KEY}
-      DB_TYPE: ${DB_TYPE}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      MQTT_ADMIN_ENABLED: "true"
-      MQTT_BROKER_HOST: "emqx"
-      MQTT_BROKER_PORT: "1883"
-      MQTT_USE_TLS: "false"
-      MQTT_USE_SHARED_SUB: "true"
-      MQTT_PASS_ENCRYPTION_KEY: ${MQTT_PASS_ENCRYPTION_KEY}
-      MQTT_ADMIN_USERNAME: ${MQTT_ADMIN_USERNAME}
-      MQTT_ADMIN_PASSWORD: ${MQTT_ADMIN_PASSWORD}
-      MQTT_ADMIN_ALLOWED_REQUESTERS: "iotnet-backend"
+      DB_SCHEMA: ${DB_SCHEMA}
+      MQTT_AUTH_RATE_LIMIT: ${MQTT_AUTH_RATE_LIMIT}
       # OpenTelemetry
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME}
@@ -81,10 +36,3 @@ services:
 
 volumes:
   emqx_auth_data:
-  emqx_data:
-  emqx_logs:
-
-networks:
-  iotnet-dev:
-    external: true
-    name: iotnet-dev

@@ -1,16 +1,14 @@
-# EMQX Auth Service - Client Management Service
+# EMQX Auth Service - MQTT User Management
 
 A high-performance authentication and authorization service for MQTT clients in the IoTNet ecosystem. Built with Rust and Actix-web.
 
 ## Features
 
-- MQTT client credential management (create, list, delete)
-- Client authentication with fast password verification
+- REST API for MQTT user management (create, list, delete)
 - JWT token generation for authenticated sessions
-- Access Control List (ACL) validation
-- **MQTT RPC API** - Backend-to-service communication via MQTT topics
-- SQLite persistence for fast authentication and ACL checks
+- PostgreSQL persistence
 - RESTful API with API key validation
+- OpenTelemetry integration for observability
 - Structured error handling and logging
 
 ## Prerequisites
@@ -27,11 +25,29 @@ A high-performance authentication and authorization service for MQTT clients in 
 Create a `.env` file:
 
 ```bash
-DB_PATH=./data/mqtt_auth.sqlite
+# Database (PostgreSQL)
+DATABASE_URL=postgresql://user:password@localhost:5432/emqx_auth
+# Or use individual DB_* variables
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=emqx_auth
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_SCHEMA=public
+
+# Authentication
 SECRET_KEY=<generate-with: make key>
 API_KEY=<generate-with: make key>
-MQTT_PASS_ENCRYPTION_KEY=<generate-with: openssl rand -hex 32>
-LOG_LEVEL=info
+
+# Logging
+RUST_LOG=info
+
+# Rate limiting
+MQTT_AUTH_RATE_LIMIT=100
+
+# OpenTelemetry (optional)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+OTEL_SERVICE_NAME=emqx-auth-service
 ```
 
 Generate a secure key:
@@ -64,25 +80,11 @@ cargo build --release
 docker compose up -d
 ```
 
-**Pull and run from GHCR:**
-
-```bash
-docker run -d \
-  --name auth-plugin \
-  -p 5500:5500 \
-  -v ./rocksdb-data:/data \
-  -e DB_PATH=/data/your_db \
-  -e SECRET_KEY=<your-secret-key> \
-  -e API_KEY=<your-api-key> \
-  -e LOG_LEVEL=info \
-  ghcr.io/farismnrr/emqx-auth-service:v0.1.0
-```
-
 **Or direct execution:**
 
 ```bash
-# Start RocksDB service
-docker compose up -d rocksdb
+# Start PostgreSQL database
+docker compose up -d postgres
 
 # Run the application
 cargo run --release
@@ -97,7 +99,7 @@ curl http://localhost:5500/
 
 ## API Endpoints
 
-All endpoints require the `x-api-key` header.
+All endpoints (except Health Check) require the `x-api-key` header.
 
 ### Health Check
 
@@ -105,276 +107,158 @@ All endpoints require the `x-api-key` header.
 GET /
 ```
 
+**Response:** `OK` (text/plain)
+
 ### Create MQTT Client
 
 ```
 POST /mqtt/create
 Content-Type: application/json
+x-api-key: <your-api-key>
 
 {
   "username": "<client_name>",
   "password": "<client_password>",
   "is_superuser": false
 }
+```
 
-Response: 200 OK
+**Response: 200 OK**
+```json
 {
   "success": true,
-  "message": "User MQTT created successfully"
+  "message": "User created successfully"
 }
 ```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid input (empty username/password)
+- `401 Unauthorized` - Missing or invalid API key
+- `409 Conflict` - Username already exists
 
 ### List MQTT Clients
 
 ```
 GET /mqtt
+x-api-key: <your-api-key>
+```
 
-Response: 200 OK
+**Query Parameters (optional):**
+- `limit` (default: 100) - Maximum number of users to return
+- `offset` (default: 0) - Number of users to skip
+
+**Response: 200 OK**
+```json
 {
   "success": true,
-  "message": "User MQTT list retrieved successfully",
+  "message": "User list retrieved successfully",
   "data": {
-    "users": [...]
+    "users": [
+      {
+        "id": 1,
+        "username": "device_001",
+        "is_superuser": false
+      }
+    ],
+    "total": 1,
+    "limit": 100,
+    "offset": 0
   }
-}
-```
-
-### Authenticate Client
-
-The `/mqtt/check` endpoint supports two authentication methods:
-
-#### Method 1: Credentials Authentication
-
-```
-POST /mqtt/check
-Content-Type: application/json
-
-{
-  "username": "<client_name>",
-  "password": "<client_password>",
-  "method": "credentials"
-}
-
-Response: 200 OK
-{
-  "success": true,
-  "message": "User MQTT is active",
-  "result": "allow"
-}
-```
-
-#### Method 2: JWT Authentication
-
-```
-POST /mqtt/check
-Content-Type: application/json
-
-{
-  "username": "<client_name>",
-  "password": "",
-  "method": "jwt"
-}
-
-Response: 200 OK
-{
-  "success": true,
-  "message": "User MQTT is active",
-  "result": "allow",
-  "data": {
-    "token": "<jwt_token_here>"
-  }
-}
-```
-
-### Check ACL Permission
-
-```
-POST /mqtt/acl
-Content-Type: application/json
-
-{
-  "username": "<client_name>",
-  "topic": "<topic_name>"
-}
-
-Response: 200 OK
-{
-  "success": true,
-  "message": "User has access",
-  "result": "allow"
 }
 ```
 
 ### Delete MQTT Client
 
 ```
-DELETE /mqtt/{<client_name>}
+DELETE /mqtt/{username}
+x-api-key: <your-api-key>
+```
 
-Response: 200 OK
+**Response: 200 OK**
+```json
 {
   "success": true,
-  "message": "User mqtt deleted successfully"
+  "message": "User deleted successfully"
 }
 ```
 
-### Get MQTT Client by ID
+**Error Responses:**
+- `401 Unauthorized` - Missing or invalid API key
+- `404 Not Found` - User not found
+
+### Generate JWT Token
+
+Generate a JWT token for EMQX authentication. The token can be used as the password when connecting to the MQTT broker.
 
 ```
-GET /mqtt/{id}
+POST /mqtt/jwt
+Content-Type: application/json
+x-api-key: <your-api-key>
 
-Response: 200 OK
+{
+  "username": "<client_name>"
+}
+```
+
+**Response: 200 OK**
+```json
 {
   "success": true,
-  "message": "User MQTT retrieved successfully",
+  "message": "JWT token generated successfully",
   "data": {
-    "id": 1,
-    "username": "client_id",
-    "is_superuser": false
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expires_at": "2026-03-20T12:00:00Z"
   }
 }
 ```
 
----
+**JWT Token Configuration:**
+- Algorithm: HS256 (HMAC-SHA256)
+- Issuer: `broker.i-ot.net`
+- Audience: `mqtt`
+- Expiration: 24 hours
+- Secret: Configured via `SECRET_KEY` environment variable
 
-## MQTT RPC API (Backend Integration)
+**Usage with EMQX:**
+```python
+import paho.mqtt.client as mqtt
 
-The MQTT RPC API enables backend-to-auth-service communication over MQTT. It uses a request-reply pattern with per-requester reply topics.
+# Get JWT token from auth service
+token_response = requests.post(
+    "http://localhost:5500/mqtt/jwt",
+    headers={"x-api-key": "YOUR_API_KEY"},
+    json={"username": "client_001"}
+)
+jwt_token = token_response.json()["data"]["token"]
 
-### Enable MQTT RPC API
-
-Set the following environment variables:
-
-```bash
-MQTT_ADMIN_ENABLED=true
-MQTT_BROKER_HOST=localhost
-MQTT_BROKER_PORT=1883
-MQTT_ADMIN_ALLOWED_REQUESTERS=iotnet-backend  # Comma-separated list
+# Connect to EMQX using JWT as password
+client = mqtt.Client(client_id="client_001")
+client.username_pw_set("client_001", jwt_token)
+client.connect("broker.i-ot.net", 1883)
 ```
-
-### Request/Response Format
-
-All MQTT RPC messages use JSON format with envelope structure:
-
-**Request Envelope:**
-```json
-{
-  "schema_version": 1,
-  "request_id": "unique-uuid-here",
-  "reply_to": "iotnet/auth/replies/backend-instance-1",
-  "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
-  // ... operation-specific fields
-}
-```
-
-**Response Envelope:**
-```json
-{
-  "schema_version": 1,
-  "request_id": "unique-uuid-here",
-  "success": true,
-  "message": "Operation completed successfully",
-  "code": null,
-  "data": { /* operation-specific data */ }
-}
-```
-
-### MQTT RPC Topics
-
-| Topic | Method | Description |
-|-------|--------|-------------|
-| `iotnet/auth/commands/users.create` | PUBLISH | Create a new MQTT user |
-| `iotnet/auth/commands/users.delete` | PUBLISH | Delete an existing MQTT user |
-| `iotnet/auth/commands/users.get` | PUBLISH | Get user by username |
-| `iotnet/auth/commands/tokens.issue` | PUBLISH | Issue JWT token for user |
-| `iotnet/auth/commands/tokens.verify` | PUBLISH | Verify user password |
-
-### Response Topics
-
-Responses are published to the `reply_to` topic specified in the request:
-- Format: `iotnet/auth/replies/{requested_by}`
-- Example: `iotnet/auth/replies/backend-prod-1`
-
-### Security Model
-
-1. **Allowed Requesters**: Only requesters in `MQTT_ADMIN_ALLOWED_REQUESTERS` can issue commands
-2. **Reply Topic Binding**: `reply_to` must exactly match `iotnet/auth/replies/{requested_by}`
-3. **Token Issuance Protection**: For `tokens.issue`, `target_user` must match `requested_by` (prevents minting tokens for other users)
-4. **Timestamp Validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
-
-### Example: Create User via MQTT RPC
-
-```json
-// Publish to: iotnet/auth/commands/users.create
-{
-  "schema_version": 1,
-  "request_id": "req-123-abc",
-  "reply_to": "iotnet/auth/replies/backend-1",
-  "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
-  "username": "new_user",
-  "password": "secure_password_123",
-  "is_superuser": false
-}
-
-// Response on: iotnet/auth/replies/backend-1
-{
-  "schema_version": 1,
-  "request_id": "req-123-abc",
-  "success": true,
-  "message": "User created successfully",
-  "code": null,
-  "data": null
-}
-```
-
-### Example: Issue Token via MQTT RPC
-
-```json
-// Publish to: iotnet/auth/commands/tokens.issue
-{
-  "schema_version": 1,
-  "request_id": "req-456-def",
-  "reply_to": "iotnet/auth/replies/backend-1",
-  "requested_by": "iotnet-backend",
-  "timestamp": 1234567890,
-  "username": "device_001",
-  "target_user": "iotnet-backend"  // Must match requested_by
-}
-
-// Response on: iotnet/auth/replies/backend-1
-{
-  "schema_version": 1,
-  "request_id": "req-456-def",
-  "success": true,
-  "message": "Token issued successfully",
-  "code": null,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-}
-```
-
-For complete MQTT RPC API documentation, see [api_documentation.md](api_documentation.md#mqtt-rpc-api-backend-integration).
 
 ## Environment Variables
 
-| Variable             | Description                        | Required | Default     |
-| -------------------- | ---------------------------------- | -------- | ----------- |
-| `DB_PATH`            | SQLite database file path          | No       | `mqtt_auth.sqlite` |
-| `SECRET_KEY`         | SHA256 hash for JWT signing        | Yes      | -           |
-| `API_KEY`            | API key for request authentication | Yes      | -           |
-| `LOG_LEVEL`          | Logging level (info, debug, warn)  | No       | `info`      |
-| `MQTT_ADMIN_ENABLED` | Enable MQTT RPC API                | No       | `false`     |
-| `MQTT_BROKER_HOST`   | MQTT broker host                   | No       | `localhost` |
-| `MQTT_BROKER_PORT`   | MQTT broker port                   | No       | `1883`      |
-| `MQTT_USE_TLS`       | Use TLS for MQTT connection        | No       | `false`     |
-| `MQTT_ADMIN_USERNAME`| MQTT client username (superuser)   | No       | -           |
-| `MQTT_ADMIN_PASSWORD`| MQTT client password               | No       | -           |
-| `MQTT_ADMIN_ALLOWED_REQUESTERS` | Comma-separated list of allowed requesters | No | `iotnet-backend` |
-| `MQTT_PASS_ENCRYPTION_KEY` | AES-256 encryption key (64 hex chars) | Yes | -   |
-| `MQTT_TOPIC_AUTH_COMMAND_PREFIX` | MQTT RPC command topic prefix | No | `iotnet/auth/commands` |
-| `MQTT_TOPIC_AUTH_REPLY_PREFIX` | MQTT RPC reply topic prefix | No | `iotnet/auth/replies` |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes* | - |
+| `DB_HOST` | Database host | No | `localhost` |
+| `DB_PORT` | Database port | No | `5432` |
+| `DB_NAME` | Database name | No | `emqx_auth` |
+| `DB_USER` | Database user | No | `postgres` |
+| `DB_PASSWORD` | Database password | No | - |
+| `DB_SCHEMA` | Database schema | No | `public` |
+| `DB_MAX_CONNECTIONS` | Max DB connections | No | `10` |
+| `DB_CONNECT_TIMEOUT` | Connection timeout (ms) | No | `5000` |
+| `DB_IDLE_TIMEOUT` | Idle connection timeout (ms) | No | `60000` |
+| `SECRET_KEY` | SHA256 hash for JWT signing | Yes | - |
+| `API_KEY` | API key for request authentication | Yes | - |
+| `RUST_LOG` | Logging level | No | `info` |
+| `MQTT_AUTH_RATE_LIMIT` | Rate limit (requests/min) | No | `100` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP endpoint | No | `http://localhost:4317` |
+| `OTEL_SERVICE_NAME` | Service name for telemetry | No | `emqx-auth-service` |
+
+*Either `DATABASE_URL` or the individual `DB_*` variables must be provided.
 
 ## Make Commands
 
@@ -391,33 +275,35 @@ make docker ps         # Show running containers
 
 ```
 src/
-├── main.rs                    # Entry point
-├── server.rs                  # HTTP server configuration
-├── handler/                   # Request handlers
-│   ├── rest/                  # REST API handlers
-│   │   ├── mod.rs
-│   │   ├── create_user.rs
-│   │   ├── check_login.rs
-│   │   ├── check_acl.rs
-│   │   ├── get_credentials.rs
-│   │   ├── list_users.rs
-│   │   └── get_user_by_id.rs
-│   └── mqtt/                  # MQTT RPC handlers
-│       ├── mod.rs
-│       ├── common.rs
-│       ├── create_user.rs
-│       ├── delete_user.rs
-│       ├── get_user.rs
-│       ├── issue_token.rs
-│       └── verify_password.rs
-├── services/                  # Business logic
-├── repositories/              # Data access layer
-├── middleware/                # HTTP middleware
-├── infrastructure/            # Database utilities
-├── entities/                  # Domain models
-├── dtos/                      # Data transfer objects
-└── utils/                     # Utilities
+├── main.rs                    # Entry point and route definitions
+├── config/                    # Application configuration
+│   ├── mod.rs
+│   └── database_config.rs
+├── presentation/              # HTTP layer (handlers, middleware)
+│   ├── handlers/
+│   │   └── rest/              # REST API handlers
+│   │       ├── create_user_handler.rs
+│   │       ├── delete_user_handler.rs
+│   │       ├── list_users_handler.rs
+│   │       └── jwt_handler.rs
+│   └── middleware/            # API key auth, metrics
+├── application/               # Business logic (use cases)
+├── domain/                    # Domain models and interfaces
+└── infrastructure/            # Database, repositories, telemetry
 ```
+
+## API Documentation
+
+- **Interactive UI:** `/openapi` (Scalar)
+- **OpenAPI JSON:** `/api-docs/openapi.json`
+- **Detailed docs:** See [docs/api_documentation.md](docs/api_documentation.md)
+
+## Production Setup
+
+For production deployment guidance, see:
+- [Production Setup Guide](docs/PRODUCTION_SETUP.md)
+- [SSL/TLS Certificate Setup](docs/CERT_SETUP.md)
+- [OpenTelemetry Integration](docs/OPENTELEMETRY_GUIDE.md)
 
 ## License
 
@@ -426,3 +312,19 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Support
 
 For issues or questions, create an issue in the repository.
+
+## Documentation Standards
+
+This service follows strict documentation standards to ensure accuracy:
+
+1. **Code is Source of Truth**: API contracts must follow routes and handlers defined in `src/main.rs`
+2. **No Fictional Features**: Documentation must not describe endpoints, environment variables, or storage engines that do not exist in the code
+3. **OpenAPI Reference**: Runtime OpenAPI specification at `/openapi` and `/api-docs/openapi.json` is the authoritative API reference
+4. **Response Accuracy**: All example responses must match actual handler return messages exactly
+5. **Configuration Accuracy**: All environment variables must match `AppConfig` and `.env.example`
+
+When updating documentation:
+- Cross-check endpoints against `src/main.rs` route definitions
+- Cross-check response messages against handler implementations
+- Cross-check environment variables against `src/config/mod.rs`
+- Verify OpenAPI spec matches documented behavior
